@@ -1,0 +1,3 @@
+# Frontend SAST Scan
+
+Read state and checkpoint first. Inventory fetch, axios, XMLHttpRequest, Angular HttpClient, React/Vue service modules, forms, hardcoded backend URLs, route guards, and local/session storage token use. Trace user-controlled data for DOM XSS, open redirect, CSRF assumptions, unsafe HTML/template rendering, token exposure, weak client-only authorization, and insecure API assumptions. Do not treat client route guards as server authorization. Save evidence, findings, progress, and reports/state before and after execution and after each meaningful unit. Do not modify application source code.

@@ -1,0 +1,9 @@
+{
+  "checkpoint_id": null,
+  "created_at": null,
+  "phase": null,
+  "completed_files": [],
+  "completed_endpoints": [],
+  "pending_queue_ref": ".sast-agent/state/scan-queue.jsonl",
+  "notes": "Initial checkpoint. No scan has started yet."
+}

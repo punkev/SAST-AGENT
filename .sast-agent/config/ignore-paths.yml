@@ -1,0 +1,28 @@
+version: 1
+description: Default low-value paths for web-pentesting-oriented review. Security-relevant config is not globally ignored.
+ignore:
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/tst/**'
+  - '**/__tests__/**'
+  - '**/mock/**'
+  - '**/mocks/**'
+  - '**/fixtures/**'
+  - '**/sample/**'
+  - '**/samples/**'
+  - '**/demo/**'
+  - '**/batch/**'
+  - '**/target/**'
+  - '**/build/**'
+  - '**/dist/**'
+  - '**/coverage/**'
+  - '**/node_modules/**'
+  - '**/.git/**'
+  - '**/.idea/**'
+  - '**/.vscode/**'
+  - '**/generated/**'
+  - '**/vendor/**'
+  - '**/logs/**'
+exceptions:
+  scan_security_relevant_config: true
+  security_relevant_config_hint: Inspect config files for CORS, CSRF, JWT, OAuth, cookie, datasource, parser, and secret settings even when located below a config directory.

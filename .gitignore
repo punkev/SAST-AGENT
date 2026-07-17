@@ -1,0 +1,4 @@
+# SAST logs and potentially sensitive evidence are local by default.
+.sast-agent/logs/*.log
+.sast-agent/evidence/snippets/*
+.sast-agent/evidence/request-examples/*

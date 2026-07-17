@@ -1,0 +1,17 @@
+{
+  "scan_id": null,
+  "status": "not_started",
+  "current_phase": null,
+  "last_completed_phase": null,
+  "current_file": null,
+  "current_endpoint": null,
+  "completed_files_count": 0,
+  "pending_files_count": 0,
+  "completed_endpoints_count": 0,
+  "pending_endpoints_count": 0,
+  "confirmed_findings_count": 0,
+  "needs_review_count": 0,
+  "duplicate_count": 0,
+  "false_positive_count": 0,
+  "last_checkpoint": ".sast-agent/state/checkpoints/latest.json"
+}
