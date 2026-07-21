@@ -2,7 +2,10 @@
 
 ## Method
 
-Use comprehensive full-repository security analysis. Start with repository discovery, enumerating and queuing **100% of files and folders** across the project (excluding only paths listed in `.sast-agent/config/ignore-paths.yml`) into `scan-queue.jsonl`. Perform a rapid **Semantic Pre-Triage Scan** of dangerous code patterns to prioritize queue ordering, but ensure that every file—whether containing an endpoint, helper logic, background script, or configuration—is inspected and recorded in `visited-files.jsonl`. Build an endpoint inventory for route-bearing files, map paths to user roles in an **Access Control Matrix**, resolve route-to-handler mappings, and construct inter-procedural **Control Flow Graphs (CFGs)** across files. Every queued file must be audited for security defects, logic flaws, high-entropy secrets, and insecure configurations.
+Use a **Smart Hybrid Architecture** to achieve complete repository coverage without token fatigue or format degradation:
+1. **Smart Triage Priority Tiering**: Enumerate 100% of files in `scan-queue.jsonl` (excluding `ignore-paths.yml`). Categorize files into **Tier 1 (High Priority Deep Analysis)** for endpoints, auth filters, config files, high-entropy secrets, and dangerous sinks; **Tier 2 (Medium Priority Dataflow Audit)** for services, DAO/repositories, and validators; and **Tier 3 (Low Priority Fast Pattern Pass)** for static formatters, DTOs, and assets.
+2. **Module-Based Batching & Instant Saving**: Process queued files in prioritized batches (Tier 1 → Tier 2 → Tier 3). Immediately record verified findings to `.sast-agent/findings/findings.jsonl` after each batch to preserve context and prevent missing findings.
+3. **Deterministic Report Generation**: Delegate HTML report creation to the `html-report-generator` skill (`generate_html_report.py` / `.js`) to ensure 100% consistent formatting, error-free UI accordions, and strict severity ordering (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW`).
 
 ## Sources and sinks
 
