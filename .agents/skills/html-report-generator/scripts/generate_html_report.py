@@ -2,6 +2,7 @@ import os
 import json
 import glob
 import html
+import re
 from datetime import datetime
 
 SEVERITY_ORDER = {
@@ -16,9 +17,78 @@ SEVERITY_ORDER = {
 def get_severity_score(sev):
     return SEVERITY_ORDER.get(str(sev).upper(), 0)
 
+def parse_markdown_finding(file_path):
+    """Extracts structured finding data from markdown files."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    finding = {
+        "id": os.path.splitext(os.path.basename(file_path))[0],
+        "title": "Untitled Finding",
+        "severity": "MEDIUM",
+        "confidence": "High",
+        "cwe": "N/A",
+        "affected_file": "N/A",
+        "endpoint": "N/A",
+        "source": "N/A",
+        "sink": "N/A",
+        "impact": "N/A",
+        "why_issue": "",
+        "data_flow": "",
+        "poc": "",
+        "vulnerable_code": "",
+        "safe_code": "",
+        "remediation": "",
+        "status": "confirmed"
+    }
+
+    # Extract title
+    title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
+    if title_match:
+        finding["title"] = title_match.group(1).strip()
+
+    # Extract Key-Value Metadata
+    sev_match = re.search(r"\*\*Severity\*\*:\s*(\w+)", content, re.IGNORECASE)
+    if sev_match:
+        finding["severity"] = sev_match.group(1).strip()
+
+    cwe_match = re.search(r"\*\*(?:CWE|OWASP)\*\*:\s*(.+)", content, re.IGNORECASE)
+    if cwe_match:
+        finding["cwe"] = cwe_match.group(1).strip()
+
+    file_match = re.search(r"\*\*Affected File\*\*:\s*(.+)", content, re.IGNORECASE)
+    if file_match:
+        finding["affected_file"] = file_match.group(1).strip()
+
+    endpoint_match = re.search(r"\*\*(?:Affected Endpoint|Endpoint)\*\*:\s*(.+)", content, re.IGNORECASE)
+    if endpoint_match:
+        finding["endpoint"] = endpoint_match.group(1).strip()
+
+    # Extract Sections
+    def extract_section(section_name, next_sections):
+        pattern = r"##?\s+" + re.escape(section_name) + r"\s*\n(.*?)(?=\n##?\s+|$)"
+        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return ""
+
+    finding["impact"] = extract_section("Impact", []) or finding["impact"]
+    finding["data_flow"] = extract_section("Data Flow", []) or extract_section("Control Flow Graph", [])
+    finding["why_issue"] = extract_section("False-Positive Checks & Rationale", []) or extract_section("Evidence & Rationale", [])
+    finding["poc"] = extract_section("PoC or Steps to Reproduce (Burp Suite)", []) or extract_section("Burp Suite PoC", [])
+    finding["vulnerable_code"] = extract_section("Vulnerable Code Snippet", []) or extract_section("Vulnerable Code", [])
+    finding["safe_code"] = extract_section("Safe Implementation", []) or extract_section("Remediation Code", [])
+    finding["remediation"] = extract_section("Remediation Strategy", []) or extract_section("Remediation", [])
+
+    return finding
+
 def parse_findings(findings_dir, jsonl_path):
     findings = []
-    
+    seen_ids = set()
+
     # 1. Try reading JSONL file if it exists
     if os.path.exists(jsonl_path):
         with open(jsonl_path, "r", encoding="utf-8") as f:
@@ -28,25 +98,38 @@ def parse_findings(findings_dir, jsonl_path):
                     continue
                 try:
                     data = json.loads(line)
+                    fid = data.get("id", data.get("finding_id", ""))
+                    if fid:
+                        seen_ids.add(fid)
                     findings.append(data)
                 except Exception:
                     pass
 
-    # 2. Also check confirmed / needs-review / duplicate / false-positive JSON/MD files if present
+    # 2. Check subfolders for JSON and MD finding files
     for subfolder in ["confirmed", "needs-review", "duplicate", "false-positive"]:
         folder_path = os.path.join(findings_dir, subfolder)
         if os.path.exists(folder_path):
             for file_name in os.listdir(folder_path):
+                full_p = os.path.join(folder_path, file_name)
                 if file_name.endswith(".json"):
-                    full_p = os.path.join(folder_path, file_name)
                     try:
                         with open(full_p, "r", encoding="utf-8") as f:
                             data = json.load(f)
-                            if not any(f.get("id") == data.get("id") for f in findings):
+                            fid = data.get("id", file_name)
+                            if fid not in seen_ids:
                                 data["status"] = subfolder
+                                seen_ids.add(fid)
                                 findings.append(data)
                     except Exception:
                         pass
+                elif file_name.endswith(".md"):
+                    parsed = parse_markdown_finding(full_p)
+                    if parsed:
+                        fid = parsed["id"]
+                        if fid not in seen_ids:
+                            parsed["status"] = subfolder
+                            seen_ids.add(fid)
+                            findings.append(parsed)
 
     # Sort findings in decreasing order of severity (Critical -> High -> Medium -> Low)
     findings.sort(key=lambda x: get_severity_score(x.get("severity", "LOW")), reverse=True)
@@ -75,20 +158,22 @@ def render_html_report(findings, scan_state, output_path):
 
     findings_html_cards = []
     for idx, f in enumerate(findings, 1):
-        fid = html.escape(str(f.get("id", f"FINDING-{idx}")))
-        title = html.escape(str(f.get("title", "Untitled Finding")))
+        fid = html.escape(str(f.get("id", f.get("finding_id", f"FINDING-{idx}"))))
+        title = html.escape(str(f.get("title", f.get("issue_name", "Untitled Vulnerability Finding"))))
         severity = str(f.get("severity", "Medium")).upper()
         confidence = html.escape(str(f.get("confidence", "High")))
-        cwe = html.escape(str(f.get("cwe", "N/A")))
-        affected_file = html.escape(str(f.get("affected_file", f.get("file", "N/A"))))
+        cwe = html.escape(str(f.get("cwe", f.get("cwe_owasp", "N/A"))))
+        affected_file = html.escape(str(f.get("affected_file", f.get("file", f.get("location", "N/A")))))
         endpoint = html.escape(str(f.get("endpoint", f.get("affected_endpoint", "N/A"))))
         impact = html.escape(str(f.get("impact", "N/A")))
         source = html.escape(str(f.get("source", "N/A")))
         sink = html.escape(str(f.get("sink", "N/A")))
-        data_flow = html.escape(str(f.get("data_flow", f.get("dataflow", "N/A"))))
-        poc = html.escape(str(f.get("poc", f.get("burp_poc", f.get("steps_to_reproduce", "N/A")))))
-        vuln_code = html.escape(str(f.get("vulnerable_code", f.get("vulnerable_code_snippet", ""))))
-        safe_code = html.escape(str(f.get("safe_code", f.get("safe_implementation", ""))))
+        data_flow = html.escape(str(f.get("data_flow", f.get("dataflow", f.get("cfg_trace", "N/A")))))
+        poc = html.escape(str(f.get("poc", f.get("burp_poc", f.get("request_template", f.get("steps_to_reproduce", "N/A"))))))
+        vuln_code = html.escape(str(f.get("vulnerable_code", f.get("vulnerable_code_snippet", f.get("unsafe_code", "")))))
+        safe_code = html.escape(str(f.get("safe_code", f.get("safe_implementation", f.get("remediation_code", "")))))
+        why_issue = html.escape(str(f.get("why_issue", f.get("why_vulnerable", f.get("rationale", f.get("evidence_rationale", f.get("negative_verification", "")))))))
+        remediation = html.escape(str(f.get("remediation", f.get("remediation_strategy", f.get("recommendation", "")))))
         status = html.escape(str(f.get("status", "confirmed")))
 
         badge_class = f"badge-{severity.lower()}"
@@ -111,27 +196,33 @@ def render_html_report(findings, scan_state, output_path):
                     <div><strong>Affected File:</strong> <code>{affected_file}</code></div>
                     <div><strong>Endpoint:</strong> <code>{endpoint}</code></div>
                     <div><strong>Confidence:</strong> {confidence}</div>
-                    <div><strong>Status:</strong> {status}</div>
+                    <div><strong>Status:</strong> <span class="status-tag">{status}</span></div>
                 </div>
 
                 <div class="section-block">
-                    <h4>Impact</h4>
+                    <h4>🔍 Vulnerability Overview & Impact</h4>
                     <p>{impact}</p>
                 </div>
 
+                {"<div class='section-block'><h4>⚠️ Why This Is A Verified Issue (Evidence & Control Bypass Rationale)</h4><div class='info-box'>" + why_issue + "</div></div>" if why_issue else ""}
+
                 <div class="section-block">
-                    <h4>Data Flow (Source → Sink)</h4>
-                    <p><strong>Source:</strong> <code>{source}</code></p>
-                    <p><strong>Sink:</strong> <code>{sink}</code></p>
+                    <h4>⛓️ Data Flow Trace (Source → Sink / CFG Propagation)</h4>
+                    <div class="flow-meta">
+                        <span><strong>Source:</strong> <code>{source}</code></span>
+                        <span><strong>Sink:</strong> <code>{sink}</code></span>
+                    </div>
                     <pre class="code-block">{data_flow}</pre>
                 </div>
 
-                {"<div class='section-block'><h4>Burp Suite HTTP PoC</h4><button class='copy-btn' onclick='copyText(this)'>Copy PoC</button><pre class='code-block poc-block'>" + poc + "</pre></div>" if poc and poc != "N/A" else ""}
+                {"<div class='section-block'><h4>🧪 Burp Suite HTTP Request Template & PoC</h4><button class='copy-btn' onclick='copyText(this)'>Copy PoC Request</button><pre class='code-block poc-block'>" + poc + "</pre></div>" if poc and poc != "N/A" else ""}
 
                 <div class="code-comparison">
-                    {"<div class='code-box vuln-box'><h4>Vulnerable Code</h4><pre class='code-block'>" + vuln_code + "</pre></div>" if vuln_code else ""}
-                    {"<div class='code-box safe-box'><h4>Safe Implementation</h4><pre class='code-block'>" + safe_code + "</pre></div>" if safe_code else ""}
+                    {"<div class='code-box vuln-box'><h4>❌ Vulnerable / Unsafe Implementation</h4><pre class='code-block'>" + vuln_code + "</pre></div>" if vuln_code else ""}
+                    {"<div class='code-box safe-box'><h4>✅ Secure / Safe Implementation</h4><pre class='code-block'>" + safe_code + "</pre></div>" if safe_code else ""}
                 </div>
+
+                {"<div class='section-block remediation-block'><h4>🛠️ Step-by-Step Remediation Strategy</h4><div class='remediation-box'>" + remediation + "</div></div>" if remediation else ""}
             </div>
         </div>
         """
@@ -144,7 +235,7 @@ def render_html_report(findings, scan_state, output_path):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAST Security Audit Report</title>
+    <title>SAST Comprehensive Security Audit Report</title>
     <style>
         :root {{
             --bg-color: #0f172a;
@@ -157,6 +248,8 @@ def render_html_report(findings, scan_state, output_path):
             --medium-color: #eab308;
             --low-color: #3b82f6;
             --code-bg: #090d16;
+            --accent-blue: #38bdf8;
+            --success-green: #22c55e;
         }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -180,11 +273,11 @@ def render_html_report(findings, scan_state, output_path):
         .header h1 {{
             margin: 0;
             font-size: 28px;
-            color: #38bdf8;
+            color: var(--accent-blue);
         }}
         .metrics-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }}
@@ -210,6 +303,7 @@ def render_html_report(findings, scan_state, output_path):
         .filter-buttons {{
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
         }}
         .filter-btn {{
             background: var(--card-bg);
@@ -222,7 +316,7 @@ def render_html_report(findings, scan_state, output_path):
             transition: all 0.2s;
         }}
         .filter-btn.active, .filter-btn:hover {{
-            background: #38bdf8;
+            background: var(--accent-blue);
             color: #0f172a;
         }}
         .search-input {{
@@ -247,6 +341,7 @@ def render_html_report(findings, scan_state, output_path):
             align-items: center;
             cursor: pointer;
             background: #1e293b;
+            transition: background 0.2s;
         }}
         .card-header:hover {{
             background: #273549;
@@ -276,7 +371,7 @@ def render_html_report(findings, scan_state, output_path):
         }}
         .meta-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px;
             margin-bottom: 16px;
             background: #0f172a;
@@ -284,11 +379,34 @@ def render_html_report(findings, scan_state, output_path):
             border-radius: 6px;
         }}
         .section-block {{
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }}
         .section-block h4 {{
             margin: 0 0 8px 0;
-            color: #38bdf8;
+            color: var(--accent-blue);
+            font-size: 15px;
+        }}
+        .info-box {{
+            background: #0f172a;
+            border-left: 4px solid var(--high-color);
+            padding: 12px;
+            border-radius: 4px;
+            line-height: 1.5;
+        }}
+        .remediation-box {{
+            background: #0f172a;
+            border-left: 4px solid var(--success-green);
+            padding: 12px;
+            border-radius: 4px;
+            line-height: 1.5;
+        }}
+        .flow-meta {{
+            display: flex;
+            gap: 24px;
+            margin-bottom: 8px;
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 4px;
         }}
         .code-block {{
             background: var(--code-bg);
@@ -300,14 +418,21 @@ def render_html_report(findings, scan_state, output_path):
             font-size: 13px;
             color: #e2e8f0;
             white-space: pre-wrap;
+            margin: 0;
         }}
         .code-comparison {{
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 16px;
+            margin-bottom: 20px;
+        }}
+        @media (max-width: 768px) {{
+            .code-comparison {{
+                grid-template-columns: 1fr;
+            }}
         }}
         .vuln-box h4 {{ color: var(--critical-color); }}
-        .safe-box h4 {{ color: #4ade80; }}
+        .safe-box h4 {{ color: var(--success-green); }}
         .copy-btn {{
             float: right;
             background: #334155;
@@ -318,13 +443,21 @@ def render_html_report(findings, scan_state, output_path):
             cursor: pointer;
             font-size: 12px;
         }}
+        .status-tag {{
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #334155;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div>
-                <h1>🛡️ SAST Security Audit Report</h1>
+                <h1>🛡️ SAST Comprehensive Security Audit Report</h1>
                 <p style="color: var(--text-muted); margin: 4px 0 0 0;">Scan ID: {scan_id} | Generated: {scan_date}</p>
             </div>
             <div>
@@ -349,9 +482,9 @@ def render_html_report(findings, scan_state, output_path):
                 <div>LOW</div>
                 <div class="value" style="color: var(--low-color);">{low_count}</div>
             </div>
-            <div class="metric-card" style="border-top: 4px solid #38bdf8;">
+            <div class="metric-card" style="border-top: 4px solid var(--accent-blue);">
                 <div>TOTAL ISSUES</div>
-                <div class="value" style="color: #38bdf8;">{total_count}</div>
+                <div class="value" style="color: var(--accent-blue);">{total_count}</div>
             </div>
         </div>
 
@@ -415,7 +548,7 @@ def render_html_report(findings, scan_state, output_path):
             const code = btn.nextElementSibling.innerText;
             navigator.clipboard.writeText(code);
             btn.innerText = 'Copied!';
-            setTimeout(() => btn.innerText = 'Copy PoC', 2000);
+            setTimeout(() => btn.innerText = 'Copy PoC Request', 2000);
         }}
     </script>
 </body>
@@ -425,7 +558,7 @@ def render_html_report(findings, scan_state, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-    print(f"[+] SAST HTML Report generated successfully: {output_path}")
+    print(f"[+] SAST Comprehensive HTML Report generated successfully: {output_path}")
 
 def main():
     workspace_root = os.getcwd()

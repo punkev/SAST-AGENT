@@ -24,42 +24,113 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+function parseMarkdownFinding(filePath) {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const finding = {
+            id: path.basename(filePath, path.extname(filePath)),
+            title: 'Untitled Finding',
+            severity: 'MEDIUM',
+            confidence: 'High',
+            cwe: 'N/A',
+            affected_file: 'N/A',
+            endpoint: 'N/A',
+            source: 'N/A',
+            sink: 'N/A',
+            impact: 'N/A',
+            why_issue: '',
+            data_flow: '',
+            poc: '',
+            vulnerable_code: '',
+            safe_code: '',
+            remediation: '',
+            status: 'confirmed'
+        };
+
+        const titleMatch = content.match(/^#\s+(.+)$/m);
+        if (titleMatch) finding.title = titleMatch[1].trim();
+
+        const sevMatch = content.match(/\*\*Severity\*\*:\s*(\w+)/i);
+        if (sevMatch) finding.severity = sevMatch[1].trim();
+
+        const cweMatch = content.match(/\*\*(?:CWE|OWASP)\*\*:\s*(.+)/i);
+        if (cweMatch) finding.cwe = cweMatch[1].trim();
+
+        const fileMatch = content.match(/\*\*Affected File\*\*:\s*(.+)/i);
+        if (fileMatch) finding.affected_file = fileMatch[1].trim();
+
+        const endpointMatch = content.match(/\*\*(?:Affected Endpoint|Endpoint)\*\*:\s*(.+)/i);
+        if (endpointMatch) finding.endpoint = endpointMatch[1].trim();
+
+        function extractSection(name) {
+            const regex = new RegExp(`##?\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##?\\s+|$)`, 'i');
+            const match = content.match(regex);
+            return match ? match[1].trim() : '';
+        }
+
+        finding.impact = extractSection('Impact') || finding.impact;
+        finding.data_flow = extractSection('Data Flow') || extractSection('Control Flow Graph');
+        finding.why_issue = extractSection('False-Positive Checks & Rationale') || extractSection('Evidence & Rationale');
+        finding.poc = extractSection('PoC or Steps to Reproduce (Burp Suite)') || extractSection('Burp Suite PoC');
+        finding.vulnerable_code = extractSection('Vulnerable Code Snippet') || extractSection('Vulnerable Code');
+        finding.safe_code = extractSection('Safe Implementation') || extractSection('Remediation Code');
+        finding.remediation = extractSection('Remediation Strategy') || extractSection('Remediation');
+
+        return finding;
+    } catch (e) {
+        return null;
+    }
+}
+
 function parseFindings(findingsDir, jsonlPath) {
     const findings = [];
+    const seenIds = new Set();
 
-    // 1. Try reading JSONL file
+    // 1. Read JSONL file
     if (fs.existsSync(jsonlPath)) {
         const lines = fs.readFileSync(jsonlPath, 'utf-8').split('\n');
         for (let line of lines) {
             line = line.trim();
             if (!line) continue;
             try {
-                findings.push(JSON.parse(line));
+                const data = JSON.parse(line);
+                const fid = data.id || data.finding_id || '';
+                if (fid) seenIds.add(fid);
+                findings.push(data);
             } catch (e) {}
         }
     }
 
-    // 2. Read subfolders
+    // 2. Read subfolders for JSON and MD files
     const subfolders = ['confirmed', 'needs-review', 'duplicate', 'false-positive'];
     for (const sub of subfolders) {
         const folderPath = path.join(findingsDir, sub);
         if (fs.existsSync(folderPath)) {
             const files = fs.readdirSync(folderPath);
             for (const file of files) {
+                const fullP = path.join(folderPath, file);
                 if (file.endsWith('.json')) {
                     try {
-                        const data = JSON.parse(fs.readFileSync(path.join(folderPath, file), 'utf-8'));
-                        if (!findings.some(f => f.id === data.id)) {
+                        const data = JSON.parse(fs.readFileSync(fullP, 'utf-8'));
+                        const fid = data.id || file;
+                        if (!seenIds.has(fid)) {
                             data.status = sub;
+                            seenIds.add(fid);
                             findings.push(data);
                         }
                     } catch (e) {}
+                } else if (file.endsWith('.md')) {
+                    const parsed = parseMarkdownFinding(fullP);
+                    if (parsed && !seenIds.has(parsed.id)) {
+                        parsed.status = sub;
+                        seenIds.add(parsed.id);
+                        findings.push(parsed);
+                    }
                 }
             }
         }
     }
 
-    // Sort decreasing severity
     findings.sort((a, b) => getSeverityScore(b.severity || 'LOW') - getSeverityScore(a.severity || 'LOW'));
     return findings;
 }
@@ -86,20 +157,22 @@ function renderHtmlReport(findings, scanState, outputPath) {
     const totalCount = findings.length;
 
     const cardsHtml = findings.map((f, idx) => {
-        const fid = escapeHtml(f.id || `FINDING-${idx + 1}`);
-        const title = escapeHtml(f.title || 'Untitled Finding');
+        const fid = escapeHtml(f.id || f.finding_id || `FINDING-${idx + 1}`);
+        const title = escapeHtml(f.title || f.issue_name || 'Untitled Vulnerability Finding');
         const severity = String(f.severity || 'MEDIUM').toUpperCase();
         const confidence = escapeHtml(f.confidence || 'High');
-        const cwe = escapeHtml(f.cwe || 'N/A');
-        const affectedFile = escapeHtml(f.affected_file || f.file || 'N/A');
+        const cwe = escapeHtml(f.cwe || f.cwe_owasp || 'N/A');
+        const affectedFile = escapeHtml(f.affected_file || f.file || f.location || 'N/A');
         const endpoint = escapeHtml(f.endpoint || f.affected_endpoint || 'N/A');
         const impact = escapeHtml(f.impact || 'N/A');
         const source = escapeHtml(f.source || 'N/A');
         const sink = escapeHtml(f.sink || 'N/A');
-        const dataFlow = escapeHtml(f.data_flow || f.dataflow || 'N/A');
-        const poc = escapeHtml(f.poc || f.burp_poc || f.steps_to_reproduce || 'N/A');
-        const vulnCode = escapeHtml(f.vulnerable_code || f.vulnerable_code_snippet || '');
-        const safeCode = escapeHtml(f.safe_code || f.safe_implementation || '');
+        const dataFlow = escapeHtml(f.data_flow || f.dataflow || f.cfg_trace || 'N/A');
+        const poc = escapeHtml(f.poc || f.burp_poc || f.request_template || f.steps_to_reproduce || 'N/A');
+        const vulnCode = escapeHtml(f.vulnerable_code || f.vulnerable_code_snippet || f.unsafe_code || '');
+        const safeCode = escapeHtml(f.safe_code || f.safe_implementation || f.remediation_code || '');
+        const whyIssue = escapeHtml(f.why_issue || f.why_vulnerable || f.rationale || f.evidence_rationale || f.negative_verification || '');
+        const remediation = escapeHtml(f.remediation || f.remediation_strategy || f.recommendation || '');
         const status = escapeHtml(f.status || 'confirmed');
         const badgeClass = `badge-${severity.toLowerCase()}`;
 
@@ -121,27 +194,33 @@ function renderHtmlReport(findings, scanState, outputPath) {
                     <div><strong>Affected File:</strong> <code>${affectedFile}</code></div>
                     <div><strong>Endpoint:</strong> <code>${endpoint}</code></div>
                     <div><strong>Confidence:</strong> ${confidence}</div>
-                    <div><strong>Status:</strong> ${status}</div>
+                    <div><strong>Status:</strong> <span class="status-tag">${status}</span></div>
                 </div>
 
                 <div class="section-block">
-                    <h4>Impact</h4>
+                    <h4>🔍 Vulnerability Overview & Impact</h4>
                     <p>${impact}</p>
                 </div>
 
+                ${whyIssue ? `<div class="section-block"><h4>⚠️ Why This Is A Verified Issue (Evidence & Control Bypass Rationale)</h4><div class="info-box">${whyIssue}</div></div>` : ''}
+
                 <div class="section-block">
-                    <h4>Data Flow (Source → Sink)</h4>
-                    <p><strong>Source:</strong> <code>${source}</code></p>
-                    <p><strong>Sink:</strong> <code>${sink}</code></p>
+                    <h4>⛓️ Data Flow Trace (Source → Sink / CFG Propagation)</h4>
+                    <div class="flow-meta">
+                        <span><strong>Source:</strong> <code>${source}</code></span>
+                        <span><strong>Sink:</strong> <code>${sink}</code></span>
+                    </div>
                     <pre class="code-block">${dataFlow}</pre>
                 </div>
 
-                ${poc && poc !== 'N/A' ? `<div class="section-block"><h4>Burp Suite HTTP PoC</h4><button class="copy-btn" onclick="copyText(this)">Copy PoC</button><pre class="code-block poc-block">${poc}</pre></div>` : ''}
+                ${poc && poc !== 'N/A' ? `<div class="section-block"><h4>🧪 Burp Suite HTTP Request Template & PoC</h4><button class="copy-btn" onclick="copyText(this)">Copy PoC Request</button><pre class="code-block poc-block">${poc}</pre></div>` : ''}
 
                 <div class="code-comparison">
-                    ${vulnCode ? `<div class="code-box vuln-box"><h4>Vulnerable Code</h4><pre class="code-block">${vulnCode}</pre></div>` : ''}
-                    ${safeCode ? `<div class="code-box safe-box"><h4>Safe Implementation</h4><pre class="code-block">${safeCode}</pre></div>` : ''}
+                    ${vulnCode ? `<div class="code-box vuln-box"><h4>❌ Vulnerable / Unsafe Implementation</h4><pre class="code-block">${vulnCode}</pre></div>` : ''}
+                    ${safeCode ? `<div class="code-box safe-box"><h4>✅ Secure / Safe Implementation</h4><pre class="code-block">${safeCode}</pre></div>` : ''}
                 </div>
+
+                ${remediation ? `<div class="section-block remediation-block"><h4>🛠️ Step-by-Step Remediation Strategy</h4><div class="remediation-box">${remediation}</div></div>` : ''}
             </div>
         </div>`;
     }).join('\n');
@@ -151,7 +230,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAST Security Audit Report</title>
+    <title>SAST Comprehensive Security Audit Report</title>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -164,6 +243,8 @@ function renderHtmlReport(findings, scanState, outputPath) {
             --medium-color: #eab308;
             --low-color: #3b82f6;
             --code-bg: #090d16;
+            --accent-blue: #38bdf8;
+            --success-green: #22c55e;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -187,11 +268,11 @@ function renderHtmlReport(findings, scanState, outputPath) {
         .header h1 {
             margin: 0;
             font-size: 28px;
-            color: #38bdf8;
+            color: var(--accent-blue);
         }
         .metrics-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
@@ -217,6 +298,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
         .filter-buttons {
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
         }
         .filter-btn {
             background: var(--card-bg);
@@ -229,7 +311,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
             transition: all 0.2s;
         }
         .filter-btn.active, .filter-btn:hover {
-            background: #38bdf8;
+            background: var(--accent-blue);
             color: #0f172a;
         }
         .search-input {
@@ -254,6 +336,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
             align-items: center;
             cursor: pointer;
             background: #1e293b;
+            transition: background 0.2s;
         }
         .card-header:hover {
             background: #273549;
@@ -283,7 +366,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
         }
         .meta-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 12px;
             margin-bottom: 16px;
             background: #0f172a;
@@ -291,11 +374,34 @@ function renderHtmlReport(findings, scanState, outputPath) {
             border-radius: 6px;
         }
         .section-block {
-            margin-bottom: 16px;
+            margin-bottom: 20px;
         }
         .section-block h4 {
             margin: 0 0 8px 0;
-            color: #38bdf8;
+            color: var(--accent-blue);
+            font-size: 15px;
+        }
+        .info-box {
+            background: #0f172a;
+            border-left: 4px solid var(--high-color);
+            padding: 12px;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+        .remediation-box {
+            background: #0f172a;
+            border-left: 4px solid var(--success-green);
+            padding: 12px;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+        .flow-meta {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 8px;
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 4px;
         }
         .code-block {
             background: var(--code-bg);
@@ -307,14 +413,21 @@ function renderHtmlReport(findings, scanState, outputPath) {
             font-size: 13px;
             color: #e2e8f0;
             white-space: pre-wrap;
+            margin: 0;
         }
         .code-comparison {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 16px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+            .code-comparison {
+                grid-template-columns: 1fr;
+            }
         }
         .vuln-box h4 { color: var(--critical-color); }
-        .safe-box h4 { color: #4ade80; }
+        .safe-box h4 { color: var(--success-green); }
         .copy-btn {
             float: right;
             background: #334155;
@@ -325,13 +438,21 @@ function renderHtmlReport(findings, scanState, outputPath) {
             cursor: pointer;
             font-size: 12px;
         }
+        .status-tag {
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #334155;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <div>
-                <h1>🛡️ SAST Security Audit Report</h1>
+                <h1>🛡️ SAST Comprehensive Security Audit Report</h1>
                 <p style="color: var(--text-muted); margin: 4px 0 0 0;">Scan ID: ${scanId} | Generated: ${scanDate}</p>
             </div>
             <div>
@@ -356,9 +477,9 @@ function renderHtmlReport(findings, scanState, outputPath) {
                 <div>LOW</div>
                 <div class="value" style="color: var(--low-color);">${lowCount}</div>
             </div>
-            <div class="metric-card" style="border-top: 4px solid #38bdf8;">
+            <div class="metric-card" style="border-top: 4px solid var(--accent-blue);">
                 <div>TOTAL ISSUES</div>
-                <div class="value" style="color: #38bdf8;">${totalCount}</div>
+                <div class="value" style="color: var(--accent-blue);">${totalCount}</div>
             </div>
         </div>
 
@@ -422,7 +543,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
             const code = btn.nextElementSibling.innerText;
             navigator.clipboard.writeText(code);
             btn.innerText = 'Copied!';
-            setTimeout(() => btn.innerText = 'Copy PoC', 2000);
+            setTimeout(() => btn.innerText = 'Copy PoC Request', 2000);
         }
     </script>
 </body>
@@ -430,7 +551,7 @@ function renderHtmlReport(findings, scanState, outputPath) {
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, htmlContent, 'utf-8');
-    console.log(`[+] SAST HTML Report generated successfully: ${outputPath}`);
+    console.log(`[+] SAST Comprehensive HTML Report generated successfully: ${outputPath}`);
 }
 
 function main() {
