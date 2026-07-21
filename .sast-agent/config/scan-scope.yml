@@ -1,5 +1,5 @@
 version: 1
-description: Scope for endpoint-driven SAST of backend, frontend, and full-stack web applications.
+description: Full-repository comprehensive scope scanning all source, configuration, template, manifest, and utility files.
 source_roots:
   - src
   - app

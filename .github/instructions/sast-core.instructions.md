@@ -2,7 +2,7 @@
 
 ## Method
 
-Use endpoint-driven source-to-sink analysis. Start with repository discovery, including a rapid **Semantic Pre-Triage Scan** of dangerous code patterns to prioritize targets. Build an endpoint inventory mapping paths to user roles, generating a role-based **Access Control Matrix**. Resolve route-to-handler mappings, model dataflow, and construct inter-procedural **Control Flow Graphs (CFGs)** before testing sinks. Search patterns are triage only; a confirmed finding needs a reachable source, relevant transformations, sink, impact, verified evidence, and an **Active Defense (Negative Verification)** check proving existing controls are bypassed.
+Use comprehensive full-repository security analysis. Start with repository discovery, enumerating and queuing **100% of files and folders** across the project (excluding only paths listed in `.sast-agent/config/ignore-paths.yml`) into `scan-queue.jsonl`. Perform a rapid **Semantic Pre-Triage Scan** of dangerous code patterns to prioritize queue ordering, but ensure that every file—whether containing an endpoint, helper logic, background script, or configuration—is inspected and recorded in `visited-files.jsonl`. Build an endpoint inventory for route-bearing files, map paths to user roles in an **Access Control Matrix**, resolve route-to-handler mappings, and construct inter-procedural **Control Flow Graphs (CFGs)** across files. Every queued file must be audited for security defects, logic flaws, high-entropy secrets, and insecure configurations.
 
 ## Sources and sinks
 
