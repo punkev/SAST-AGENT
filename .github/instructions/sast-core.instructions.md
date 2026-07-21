@@ -13,6 +13,7 @@ Sources include request paths, query/form parameters, JSON bodies, headers, cook
 - Read `.sast-agent/config` and ignore only configured low-value paths.
 - Treat production configuration, security filters, dependency manifests, and deployment descriptors as in scope.
 - Distinguish authentication from authorization and server enforcement from client-only controls.
+- Perform explicit **Negative Verification**: inspect strict type-safety checks (e.g., primitive type parsing, schema validation, enum bounds) and automated ORM parameterization (e.g., JPA/Hibernate bindings, Prisma, parameterized drivers) to ensure existing controls do not mitigate the issue before confirming a finding.
 - Save state for each file, endpoint, controller, route, verified finding, and report section.
 - Keep evidence concise, line-anchored, and secret-redacted.
 
