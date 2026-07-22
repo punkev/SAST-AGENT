@@ -45,7 +45,7 @@ This directory configures how GitHub Copilot Chat interacts with the SAST framew
   - 📄 [`sast-java-web-scan.prompt.md`](file:///.github/prompts/sast-java-web-scan.prompt.md): Prompt focused on Java, Spring, and Struts security analysis.
   - 📄 [`sast-node-express-scan.prompt.md`](file:///.github/prompts/sast-node-express-scan.prompt.md): Prompt focused on Node.js and Express backend security.
   - 📄 [`sast-frontend-scan.prompt.md`](file:///.github/prompts/sast-frontend-scan.prompt.md): Prompt focused on frontend client security (DOM XSS, API security, token handling).
-  - 📄 [`sast-hardcoded-secrets.prompt.md`](file:///.github/prompts/sast-hardcoded-secrets.prompt.md): Prompt for scanning source code and config files (`.env`, `application.yml`, `web.xml`) for high-entropy secrets.
+  - 📄 [`sast-rescan-inventory.prompt.md`](file:///.github/prompts/sast-rescan-inventory.prompt.md): Prompt to run a fast, token-efficient vulnerability re-scan reusing existing `.sast-agent/inventory/` files without rebuilding them.
   - 📄 [`sast-verify-finding.prompt.md`](file:///.github/prompts/sast-verify-finding.prompt.md): Prompt to re-audit a single candidate finding by ID.
   - 📄 [`sast-final-report.prompt.md`](file:///.github/prompts/sast-final-report.prompt.md): Prompt to generate final markdown reports and trigger the HTML report skill.
 
