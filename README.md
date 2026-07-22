@@ -55,10 +55,9 @@ This directory configures how GitHub Copilot Chat interacts with the SAST framew
 Contains modular extension skills registered with the agent runtime.
 
 - 📁 **`skills/html-report-generator/`**:
-  - 📄 [`SKILL.md`](file:///.agents/skills/html-report-generator/SKILL.md): Skill specification detailing interactive HTML report generation with 3-tier fallback execution (Python → Node.js → Native LLM).
+  - 📄 [`SKILL.md`](file:///.agents/skills/html-report-generator/SKILL.md): Skill specification detailing deterministic Python HTML report generation combining all Markdown and JSON findings into a single interactive HTML audit report.
   - 📁 **`scripts/`**:
-    - 📄 [`generate_html_report.py`](file:///.agents/skills/html-report-generator/scripts/generate_html_report.py): Pure Python script (zero dependencies) parsing JSONL findings and generating `.sast-agent/reports/index.html` sorted by severity.
-    - 📄 [`generate_html_report.js`](file:///.agents/skills/html-report-generator/scripts/generate_html_report.js): Node.js fallback script performing identical deterministic HTML generation.
+    - 📄 [`generate_html_report.py`](file:///.agents/skills/html-report-generator/scripts/generate_html_report.py): Pure Python script (zero dependencies) aggregating all `.md` and `.json` findings into `.sast-agent/reports/index.html` sorted by severity.
 
 ---
 

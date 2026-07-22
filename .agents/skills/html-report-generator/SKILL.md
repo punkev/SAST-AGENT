@@ -5,27 +5,27 @@ description: Generate a single, standalone interactive HTML security report merg
 
 # HTML Report Generator Skill
 
-This skill compiles all SAST findings, state metadata, and evidence into a single, self-contained interactive HTML security audit report (`.sast-agent/reports/index.html`).
+This skill parses and aggregates all SAST findings from `.sast-agent/findings/` (both `findings.jsonl` and all `.md`/`.json` finding files across subfolders) into a single, self-contained interactive HTML report (`.sast-agent/reports/index.html`).
 
-## Execution Workflow
+## Execution
 
-Try executing via available system runtimes in order:
+Execute the Python report generator script from the workspace root:
 
-### 1. Python Execution (Primary)
 ```bash
 python .agents/skills/html-report-generator/scripts/generate_html_report.py
 ```
 
-### 2. Node.js Execution (Fallback if Python is not installed)
-```bash
-node .agents/skills/html-report-generator/scripts/generate_html_report.js
-```
+## Features & Guarantees
 
-### 3. Native Agent Generation (Fallback if neither Python nor Node.js are available)
-If system script execution fails or runtimes are unavailable, the AI agent itself will directly read `.sast-agent/findings/findings.jsonl`, parse and sort all findings by decreasing severity (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW`), and write `.sast-agent/reports/index.html` using the template layout defined in `generate_html_report.js`.
-
-## Output Requirements
-
-- **File Path:** `.sast-agent/reports/index.html`
-- **Ordering:** Strictly decreasing order of severity (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW`).
-- **Interactive UI:** Must include executive dashboard metrics, severity filter buttons, real-time search, collapsible accordions, CFG data flows, side-by-side code comparison, and copyable Burp Suite HTTP PoC requests.
+1. **Deterministic Execution:** Uses pure Python standard library (`sys`, `os`, `json`, `re`, `html`, `datetime`) to parse all JSONL and Markdown findings deterministically.
+2. **Comprehensive Markdown Aggregation:** Reads and combines all `.md` and `.json` finding details across `confirmed/`, `needs-review/`, `duplicate/`, and `false-positive/`.
+3. **Strict Severity Ordering:** Merges all discovered issues into a single report sorted in decreasing order of severity (`CRITICAL` → `HIGH` → `MEDIUM` → `LOW` → `NEEDS-REVIEW` → `INFO`).
+4. **Complete Aspect Cards:** Renders all issue aspects in every finding card:
+   - Vulnerability Overview & Description.
+   - Evidence & Control Bypass Rationale (Negative Verification).
+   - Test PoC / Attack Payload.
+   - Burp Suite HTTP Request Template (with copy button).
+   - Burp Suite Expected Response.
+   - Control Flow Graph (CFG) / Data Flow Trace (Source → Sink).
+   - Bad Code vs. Good Code Comparison.
+   - Step-by-Step Remediation Strategy.

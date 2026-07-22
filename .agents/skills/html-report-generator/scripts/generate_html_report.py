@@ -3,6 +3,7 @@ import json
 import glob
 import html
 import re
+import sys
 from datetime import datetime
 
 SEVERITY_ORDER = {
@@ -17,17 +18,27 @@ SEVERITY_ORDER = {
 def get_severity_score(sev):
     return SEVERITY_ORDER.get(str(sev).upper(), 0)
 
+def extract_markdown_section(content, section_names):
+    """Extracts section content under matching ## or ### headers."""
+    for name in section_names:
+        pattern = r"##?\s+" + re.escape(name) + r"\s*\n(.*?)(?=\n##?\s+|$)"
+        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    return ""
+
 def parse_markdown_finding(file_path):
-    """Extracts structured finding data from markdown files."""
+    """Parses a Markdown finding file into a structured dictionary."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
     except Exception:
         return None
 
+    fid = os.path.splitext(os.path.basename(file_path))[0]
     finding = {
-        "id": os.path.splitext(os.path.basename(file_path))[0],
-        "title": "Untitled Finding",
+        "id": fid,
+        "title": "Untitled Vulnerability Finding",
         "severity": "MEDIUM",
         "confidence": "High",
         "cwe": "N/A",
@@ -35,22 +46,25 @@ def parse_markdown_finding(file_path):
         "endpoint": "N/A",
         "source": "N/A",
         "sink": "N/A",
+        "description": "",
         "impact": "N/A",
         "why_issue": "",
+        "payload": "",
+        "burp_request": "",
+        "burp_response": "",
         "data_flow": "",
-        "poc": "",
         "vulnerable_code": "",
         "safe_code": "",
         "remediation": "",
         "status": "confirmed"
     }
 
-    # Extract title
+    # Extract Title
     title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
     if title_match:
         finding["title"] = title_match.group(1).strip()
 
-    # Extract Key-Value Metadata
+    # Extract Key Metadata
     sev_match = re.search(r"\*\*Severity\*\*:\s*(\w+)", content, re.IGNORECASE)
     if sev_match:
         finding["severity"] = sev_match.group(1).strip()
@@ -67,45 +81,94 @@ def parse_markdown_finding(file_path):
     if endpoint_match:
         finding["endpoint"] = endpoint_match.group(1).strip()
 
-    # Extract Sections
-    def extract_section(section_name, next_sections):
-        pattern = r"##?\s+" + re.escape(section_name) + r"\s*\n(.*?)(?=\n##?\s+|$)"
-        match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-        return ""
+    source_match = re.search(r"\*\*Source\*\*:\s*(.+)", content, re.IGNORECASE)
+    if source_match:
+        finding["source"] = source_match.group(1).strip()
 
-    finding["impact"] = extract_section("Impact", []) or finding["impact"]
-    finding["data_flow"] = extract_section("Data Flow", []) or extract_section("Control Flow Graph", [])
-    finding["why_issue"] = extract_section("False-Positive Checks & Rationale", []) or extract_section("Evidence & Rationale", [])
-    finding["poc"] = extract_section("PoC or Steps to Reproduce (Burp Suite)", []) or extract_section("Burp Suite PoC", [])
-    finding["vulnerable_code"] = extract_section("Vulnerable Code Snippet", []) or extract_section("Vulnerable Code", [])
-    finding["safe_code"] = extract_section("Safe Implementation", []) or extract_section("Remediation Code", [])
-    finding["remediation"] = extract_section("Remediation Strategy", []) or extract_section("Remediation", [])
+    sink_match = re.search(r"\*\*Sink\*\*:\s*(.+)", content, re.IGNORECASE)
+    if sink_match:
+        finding["sink"] = sink_match.group(1).strip()
+
+    # Extract Sections
+    finding["description"] = extract_markdown_section(content, ["Description", "Vulnerability Overview", "Overview"])
+    finding["impact"] = extract_markdown_section(content, ["Impact", "Vulnerability Impact"]) or finding["description"]
+    finding["why_issue"] = extract_markdown_section(content, ["False-Positive Checks & Rationale", "Evidence & Rationale", "Why Issue", "Evidence Rationale", "Control Bypass Rationale"])
+    finding["payload"] = extract_markdown_section(content, ["Test PoC / Payload", "Attack Payload", "Test Payload", "Payload"])
+    finding["burp_request"] = extract_markdown_section(content, ["Burp Suite HTTP PoC", "Burp Suite Request Template", "PoC or Steps to Reproduce (Burp Suite)", "Burp Suite Request"])
+    finding["burp_response"] = extract_markdown_section(content, ["Burp Suite Expected Response", "Expected Response", "Burp Response", "Response Expected"])
+    finding["data_flow"] = extract_markdown_section(content, ["Data Flow", "Control Flow Graph", "CFG Trace", "Data Flow Trace"])
+    finding["vulnerable_code"] = extract_markdown_section(content, ["Vulnerable Code Snippet", "Bad Code", "Unsafe Implementation", "Vulnerable Code"])
+    finding["safe_code"] = extract_markdown_section(content, ["Safe Implementation", "Good Code", "Secure Implementation", "Remediation Code"])
+    finding["remediation"] = extract_markdown_section(content, ["Remediation Strategy", "Remediation Plan", "Defense Strategy", "Remediation"])
 
     return finding
 
-def parse_findings(findings_dir, jsonl_path):
-    findings = []
-    seen_ids = set()
+def normalize_finding(raw):
+    """Normalizes raw JSON or dictionary findings into a standardized structure."""
+    if not isinstance(raw, dict):
+        return None
 
-    # 1. Try reading JSONL file if it exists
+    fid = str(raw.get("id", raw.get("finding_id", raw.get("issue_id", "FINDING-UNKNOWN"))))
+    
+    return {
+        "id": fid,
+        "title": str(raw.get("title", raw.get("issue_name", raw.get("name", "Untitled Vulnerability Finding")))),
+        "severity": str(raw.get("severity", "MEDIUM")).upper(),
+        "confidence": str(raw.get("confidence", "High")),
+        "cwe": str(raw.get("cwe", raw.get("cwe_owasp", "N/A"))),
+        "affected_file": str(raw.get("affected_file", raw.get("file", raw.get("location", "N/A")))),
+        "endpoint": str(raw.get("endpoint", raw.get("affected_endpoint", "N/A"))),
+        "source": str(raw.get("source", "N/A")),
+        "sink": str(raw.get("sink", "N/A")),
+        "description": str(raw.get("description", raw.get("overview", ""))),
+        "impact": str(raw.get("impact", raw.get("description", "N/A"))),
+        "why_issue": str(raw.get("why_issue", raw.get("why_vulnerable", raw.get("rationale", raw.get("evidence_rationale", raw.get("negative_verification", "")))))),
+        "payload": str(raw.get("payload", raw.get("test_poc", raw.get("attack_payload", "")))),
+        "burp_request": str(raw.get("burp_request", raw.get("burp_poc", raw.get("request_template", raw.get("poc", raw.get("steps_to_reproduce", "")))))),
+        "burp_response": str(raw.get("burp_response", raw.get("expected_response", raw.get("response_expected", "")))),
+        "data_flow": str(raw.get("data_flow", raw.get("dataflow", raw.get("cfg_trace", "")))),
+        "vulnerable_code": str(raw.get("vulnerable_code", raw.get("vulnerable_code_snippet", raw.get("unsafe_code", raw.get("bad_code", ""))))),
+        "safe_code": str(raw.get("safe_code", raw.get("safe_implementation", raw.get("remediation_code", raw.get("good_code", ""))))),
+        "remediation": str(raw.get("remediation", raw.get("remediation_strategy", raw.get("remediation_plan", raw.get("recommendation", ""))))),
+        "status": str(raw.get("status", "confirmed"))
+    }
+
+def merge_findings(existing, incoming):
+    """Merges incoming finding data into existing finding to preserve all attributes."""
+    for key, val in incoming.items():
+        if val and val != "N/A" and val != "":
+            if not existing.get(key) or existing.get(key) == "N/A" or existing.get(key) == "":
+                existing[key] = val
+            elif len(str(val)) > len(str(existing.get(key, ""))):
+                existing[key] = val
+    return existing
+
+def parse_all_findings(findings_dir, jsonl_path):
+    findings_map = {}
+
+    # 1. Read JSONL file if present
     if os.path.exists(jsonl_path):
-        with open(jsonl_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                    fid = data.get("id", data.get("finding_id", ""))
-                    if fid:
-                        seen_ids.add(fid)
-                    findings.append(data)
-                except Exception:
-                    pass
+        try:
+            with open(jsonl_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        raw = json.loads(line)
+                        norm = normalize_finding(raw)
+                        if norm:
+                            fid = norm["id"]
+                            if fid in findings_map:
+                                findings_map[fid] = merge_findings(findings_map[fid], norm)
+                            else:
+                                findings_map[fid] = norm
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
-    # 2. Check subfolders for JSON and MD finding files
+    # 2. Read subfolders for JSON and MD files
     for subfolder in ["confirmed", "needs-review", "duplicate", "false-positive"]:
         folder_path = os.path.join(findings_dir, subfolder)
         if os.path.exists(folder_path):
@@ -114,24 +177,28 @@ def parse_findings(findings_dir, jsonl_path):
                 if file_name.endswith(".json"):
                     try:
                         with open(full_p, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            fid = data.get("id", file_name)
-                            if fid not in seen_ids:
-                                data["status"] = subfolder
-                                seen_ids.add(fid)
-                                findings.append(data)
+                            raw = json.load(f)
+                            norm = normalize_finding(raw)
+                            if norm:
+                                norm["status"] = subfolder
+                                fid = norm["id"]
+                                if fid in findings_map:
+                                    findings_map[fid] = merge_findings(findings_map[fid], norm)
+                                else:
+                                    findings_map[fid] = norm
                     except Exception:
                         pass
                 elif file_name.endswith(".md"):
                     parsed = parse_markdown_finding(full_p)
                     if parsed:
+                        parsed["status"] = subfolder
                         fid = parsed["id"]
-                        if fid not in seen_ids:
-                            parsed["status"] = subfolder
-                            seen_ids.add(fid)
-                            findings.append(parsed)
+                        if fid in findings_map:
+                            findings_map[fid] = merge_findings(findings_map[fid], parsed)
+                        else:
+                            findings_map[fid] = parsed
 
-    # Sort findings in decreasing order of severity (Critical -> High -> Medium -> Low)
+    findings = list(findings_map.values())
     findings.sort(key=lambda x: get_severity_score(x.get("severity", "LOW")), reverse=True)
     return findings
 
@@ -145,7 +212,7 @@ def load_scan_state(state_path):
     return {}
 
 def render_html_report(findings, scan_state, output_path):
-    scan_id = scan_state.get("scan_id", "N/A")
+    scan_id = scan_state.get("scan_id", "SAST-SCAN-LATEST")
     scan_date = scan_state.get("timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     endpoints_scanned = scan_state.get("endpoints_scanned", 0)
     files_scanned = scan_state.get("files_scanned", 0)
@@ -158,22 +225,24 @@ def render_html_report(findings, scan_state, output_path):
 
     findings_html_cards = []
     for idx, f in enumerate(findings, 1):
-        fid = html.escape(str(f.get("id", f.get("finding_id", f"FINDING-{idx}"))))
-        title = html.escape(str(f.get("title", f.get("issue_name", "Untitled Vulnerability Finding"))))
-        severity = str(f.get("severity", "Medium")).upper()
+        fid = html.escape(str(f.get("id", f"FINDING-{idx}")))
+        title = html.escape(str(f.get("title", "Untitled Vulnerability Finding")))
+        severity = str(f.get("severity", "MEDIUM")).upper()
         confidence = html.escape(str(f.get("confidence", "High")))
-        cwe = html.escape(str(f.get("cwe", f.get("cwe_owasp", "N/A"))))
-        affected_file = html.escape(str(f.get("affected_file", f.get("file", f.get("location", "N/A")))))
-        endpoint = html.escape(str(f.get("endpoint", f.get("affected_endpoint", "N/A"))))
-        impact = html.escape(str(f.get("impact", "N/A")))
+        cwe = html.escape(str(f.get("cwe", "N/A")))
+        affected_file = html.escape(str(f.get("affected_file", "N/A")))
+        endpoint = html.escape(str(f.get("endpoint", "N/A")))
         source = html.escape(str(f.get("source", "N/A")))
         sink = html.escape(str(f.get("sink", "N/A")))
-        data_flow = html.escape(str(f.get("data_flow", f.get("dataflow", f.get("cfg_trace", "N/A")))))
-        poc = html.escape(str(f.get("poc", f.get("burp_poc", f.get("request_template", f.get("steps_to_reproduce", "N/A"))))))
-        vuln_code = html.escape(str(f.get("vulnerable_code", f.get("vulnerable_code_snippet", f.get("unsafe_code", "")))))
-        safe_code = html.escape(str(f.get("safe_code", f.get("safe_implementation", f.get("remediation_code", "")))))
-        why_issue = html.escape(str(f.get("why_issue", f.get("why_vulnerable", f.get("rationale", f.get("evidence_rationale", f.get("negative_verification", "")))))))
-        remediation = html.escape(str(f.get("remediation", f.get("remediation_strategy", f.get("recommendation", "")))))
+        impact = html.escape(str(f.get("impact", "N/A")))
+        why_issue = html.escape(str(f.get("why_issue", "")))
+        payload = html.escape(str(f.get("payload", "")))
+        burp_req = html.escape(str(f.get("burp_request", "")))
+        burp_res = html.escape(str(f.get("burp_response", "")))
+        data_flow = html.escape(str(f.get("data_flow", "")))
+        vuln_code = html.escape(str(f.get("vulnerable_code", "")))
+        safe_code = html.escape(str(f.get("safe_code", "")))
+        remediation = html.escape(str(f.get("remediation", "")))
         status = html.escape(str(f.get("status", "confirmed")))
 
         badge_class = f"badge-{severity.lower()}"
@@ -200,29 +269,26 @@ def render_html_report(findings, scan_state, output_path):
                 </div>
 
                 <div class="section-block">
-                    <h4>🔍 Vulnerability Overview & Impact</h4>
+                    <h4>🔍 Vulnerability Description & Impact</h4>
                     <p>{impact}</p>
                 </div>
 
-                {"<div class='section-block'><h4>⚠️ Why This Is A Verified Issue (Evidence & Control Bypass Rationale)</h4><div class='info-box'>" + why_issue + "</div></div>" if why_issue else ""}
+                {"<div class='section-block'><h4>⚠️ Evidence & Control Bypass Rationale</h4><div class='info-box'>" + why_issue + "</div></div>" if why_issue else ""}
 
-                <div class="section-block">
-                    <h4>⛓️ Data Flow Trace (Source → Sink / CFG Propagation)</h4>
-                    <div class="flow-meta">
-                        <span><strong>Source:</strong> <code>{source}</code></span>
-                        <span><strong>Sink:</strong> <code>{sink}</code></span>
-                    </div>
-                    <pre class="code-block">{data_flow}</pre>
-                </div>
+                {"<div class='section-block'><h4>🎯 Test PoC / Attack Payload</h4><pre class='code-block payload-block'>" + payload + "</pre></div>" if payload else ""}
 
-                {"<div class='section-block'><h4>🧪 Burp Suite HTTP Request Template & PoC</h4><button class='copy-btn' onclick='copyText(this)'>Copy PoC Request</button><pre class='code-block poc-block'>" + poc + "</pre></div>" if poc and poc != "N/A" else ""}
+                {"<div class='section-block'><h4>🧪 Burp Suite HTTP Request Template</h4><button class='copy-btn' onclick='copyText(this)'>Copy Request</button><pre class='code-block poc-block'>" + burp_req + "</pre></div>" if burp_req else ""}
+
+                {"<div class='section-block'><h4>📥 Burp Suite Expected Response</h4><pre class='code-block response-block'>" + burp_res + "</pre></div>" if burp_res else ""}
+
+                {"<div class='section-block'><h4>⛓️ Control Flow Graph (CFG) / Data Flow Trace</h4><div class='flow-meta'><span><strong>Source:</strong> <code>" + source + "</code></span><span><strong>Sink:</strong> <code>" + sink + "</code></span></div><pre class='code-block'>" + data_flow + "</pre></div>" if data_flow else ""}
 
                 <div class="code-comparison">
-                    {"<div class='code-box vuln-box'><h4>❌ Vulnerable / Unsafe Implementation</h4><pre class='code-block'>" + vuln_code + "</pre></div>" if vuln_code else ""}
-                    {"<div class='code-box safe-box'><h4>✅ Secure / Safe Implementation</h4><pre class='code-block'>" + safe_code + "</pre></div>" if safe_code else ""}
+                    {"<div class='code-box vuln-box'><h4>❌ Vulnerable / Unsafe Code</h4><pre class='code-block'>" + vuln_code + "</pre></div>" if vuln_code else ""}
+                    {"<div class='code-box safe-box'><h4>✅ Secure / Safe Code</h4><pre class='code-block'>" + safe_code + "</pre></div>" if safe_code else ""}
                 </div>
 
-                {"<div class='section-block remediation-block'><h4>🛠️ Step-by-Step Remediation Strategy</h4><div class='remediation-box'>" + remediation + "</div></div>" if remediation else ""}
+                {"<div class='section-block remediation-block'><h4>🛠️ Step-by-Step Remediation Plan</h4><div class='remediation-box'>" + remediation + "</div></div>" if remediation else ""}
             </div>
         </div>
         """
@@ -235,7 +301,7 @@ def render_html_report(findings, scan_state, output_path):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAST Comprehensive Security Audit Report</title>
+    <title>SAST Security Audit Comprehensive Report</title>
     <style>
         :root {{
             --bg-color: #0f172a;
@@ -457,7 +523,7 @@ def render_html_report(findings, scan_state, output_path):
     <div class="container">
         <div class="header">
             <div>
-                <h1>🛡️ SAST Comprehensive Security Audit Report</h1>
+                <h1>🛡️ SAST Security Audit Comprehensive Report</h1>
                 <p style="color: var(--text-muted); margin: 4px 0 0 0;">Scan ID: {scan_id} | Generated: {scan_date}</p>
             </div>
             <div>
@@ -548,7 +614,7 @@ def render_html_report(findings, scan_state, output_path):
             const code = btn.nextElementSibling.innerText;
             navigator.clipboard.writeText(code);
             btn.innerText = 'Copied!';
-            setTimeout(() => btn.innerText = 'Copy PoC Request', 2000);
+            setTimeout(() => btn.innerText = 'Copy Request', 2000);
         }}
     </script>
 </body>
@@ -558,7 +624,7 @@ def render_html_report(findings, scan_state, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-    print(f"[+] SAST Comprehensive HTML Report generated successfully: {output_path}")
+    print(f"[+] SAST HTML Report generated successfully: {output_path}")
 
 def main():
     workspace_root = os.getcwd()
@@ -568,7 +634,7 @@ def main():
     state_path = os.path.join(sast_dir, "state", "scan-state.json")
     output_path = os.path.join(sast_dir, "reports", "index.html")
 
-    findings = parse_findings(findings_dir, jsonl_path)
+    findings = parse_all_findings(findings_dir, jsonl_path)
     scan_state = load_scan_state(state_path)
     render_html_report(findings, scan_state, output_path)
 
