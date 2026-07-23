@@ -1,32 +1,6 @@
 version: 1
-description: Comprehensive ignore rules for Node.js, JS/TS, Java, and full-stack web SAST reviews.
+description: Default low-value paths for web-pentesting-oriented review. Security-relevant config is not globally ignored.
 ignore:
-  # 1. Dependencies & Third-Party Code
-  - '**/node_modules/**'
-  - '**/bower_components/**'
-  - '**/vendor/**'
-
-  # 2. Dependency Lockfiles
-  - '**/package-lock.json'
-  - '**/yarn.lock'
-  - '**/pnpm-lock.yaml'
-  - '**/npm-shrinkwrap.json'
-
-  # 3. Build Outputs, Transpiled Bundles & Source Maps
-  - '**/dist/**'
-  - '**/build/**'
-  - '**/target/**'
-  - '**/out/**'
-  - '**/.next/**'
-  - '**/.nuxt/**'
-  - '**/.svelte-kit/**'
-  - '**/.cache/**'
-  - '**/generated/**'
-  - '**/*.min.js'
-  - '**/*.min.css'
-  - '**/*.map'
-
-  # 4. Test Suites & Coverage Outputs
   - '**/test/**'
   - '**/tests/**'
   - '**/tst/**'
@@ -37,37 +11,18 @@ ignore:
   - '**/sample/**'
   - '**/samples/**'
   - '**/demo/**'
+  - '**/batch/**'
+  - '**/target/**'
+  - '**/build/**'
+  - '**/dist/**'
   - '**/coverage/**'
-  - '**/.nyc_output/**'
-
-  # 5. Linters, Formatters & Tooling Configurations
-  - '**/.eslintrc*'
-  - '**/eslint.config.js'
-  - '**/.prettierrc*'
-  - '**/.prettierignore'
-  - '**/.editorconfig'
-  - '**/.babelrc'
-  - '**/tsconfig.tsbuildinfo'
-
-  # 6. IDE, Git & Log Directories
+  - '**/node_modules/**'
   - '**/.git/**'
   - '**/.idea/**'
   - '**/.vscode/**'
+  - '**/generated/**'
+  - '**/vendor/**'
   - '**/logs/**'
-  - '**/*.log'
-
-  # 7. Static Assets & Media (Non-Code)
-  - '**/*.png'
-  - '**/*.jpg'
-  - '**/*.jpeg'
-  - '**/*.gif'
-  - '**/*.svg'
-  - '**/*.ico'
-  - '**/*.woff'
-  - '**/*.woff2'
-  - '**/*.ttf'
-  - '**/*.eot'
-
 exceptions:
   scan_security_relevant_config: true
-  security_relevant_config_hint: Inspect application.yml, application.properties, .env, web.xml, package.json, server.js, and auth/CORS/JWT configs even when located below a config directory.
+  security_relevant_config_hint: Inspect config files for CORS, CSRF, JWT, OAuth, cookie, datasource, parser, and secret settings even when located below a config directory.
