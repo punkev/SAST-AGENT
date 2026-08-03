@@ -1,4 +1,5 @@
-# SAST logs and potentially sensitive evidence are local by default.
-.sast-agent/logs/*.log
-.sast-agent/evidence/snippets/*
-.sast-agent/evidence/request-examples/*
+# Runtime scan output (populated during scans, not committed)
+.sast-agent/output/
+
+# Scan logs
+.sast-agent/logs/

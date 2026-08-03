@@ -1,7 +1,7 @@
 {
   "github.copilot.chat.codeGeneration.useInstructionFiles": true,
   "github.copilot.chat.reviewSelection.instructions": [
-    ".github/instructions/sast-core.instructions.md",
-    ".github/instructions/finding-format.instructions.md"
+    ".github/instructions/finding-format.instructions.md",
+    ".github/instructions/owasp-checklist.instructions.md"
   ]
 }
