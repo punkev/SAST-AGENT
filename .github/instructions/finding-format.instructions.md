@@ -1,17 +1,21 @@
 # Finding Format
 
-Every finding in `.sast-agent/output/findings.md` must be a markdown section with this structure:
+Every finding in `.sast-agent/output/findings.md` must follow one of the two standard structures below:
+
+---
+
+## 1. Standard Single Finding Structure
 
 ```markdown
 ## FINDING-{NNN}: {Title} [{SEVERITY}]
 
 **CWE**: CWE-{id} | **OWASP**: {category}
 **File**: `{relative/path/to/file.java}` L{start}-{end}
-**Endpoint**: `{HTTP_METHOD} {route}`
+**Endpoint / Component**: `{HTTP_METHOD} {route}` or `{ClassName}.{methodName}()`
 
-### Request Flow
-1. {Entry point with file and line}
-2. → {Next call with file and line}
+### Request / Control Flow
+1. {Entry point or source with file and line}
+2. → {Next inter-procedural call with file and line}
 3. → {Sink with file and line} — **SINK**
 
 ### Impact
@@ -33,6 +37,38 @@ Every finding in `.sast-agent/output/findings.md` must be a markdown section wit
 ---
 ```
 
+---
+
+## 2. Composite Exploit Chain Structure
+
+Use this format when chaining 2 or 3 indirect, lower-severity, or subtle issues into an escalated composite attack path:
+
+```markdown
+## COMPOSITE-{NNN}: {Title} [{ESCALATED SEVERITY}]
+
+**Chained Vulnerabilities**: `FINDING-001` (Info Leak) + `FINDING-004` (Missing Auth Guard) + `FINDING-009` (Mass Assignment)
+**Primary Affected File**: `{relative/path/to/primary_file.java}` L{start}-{end}
+**Target Endpoint**: `{HTTP_METHOD} {route}`
+
+### Chained Attack Flow
+1. **Step 1 (Initial Prerequisite)**: {Attacker leverages Finding 1 (e.g. extracts internal ID format / hash key) from `FileA.java` L12-L24}
+2. **Step 2 (Bypass / Access)**: → {Attacker reaches unauthenticated internal endpoint in `FileB.java` L45-L58}
+3. **Step 3 (Escalated Exploit)**: → {Attacker triggers mass assignment / state corruption in `FileC.java` L89-L102} — **ESCALATED IMPACT**
+
+### Escalated Impact
+{Detailed explanation of how combining these subtle issues yields a Critical/High impact (e.g. Account Takeover, Admin Privilege Escalation, Remote Code Execution).}
+
+### Composite Attack Evidence & Payload
+{Step-by-step PoC instructions / HTTP request templates detailing how the chain is executed sequentially.}
+
+### Unified Remediation Strategy
+{Comprehensive fix addressing each link in the exploit chain to break the attack path completely.}
+
+---
+```
+
+---
+
 ## Field Rules
 
 | Field | Required | Notes |
@@ -41,13 +77,14 @@ Every finding in `.sast-agent/output/findings.md` must be a markdown section wit
 | Severity | Always | CRITICAL, HIGH, MEDIUM, or LOW |
 | CWE/OWASP | Always | Specific CWE + OWASP category |
 | File + Line | Always | Real path and line numbers from the codebase |
-| Endpoint | Always | The HTTP route affected (if applicable) |
-| Request Flow | Always | Step-by-step trace with file:line at each step |
-| Impact | Always | Specific attacker capabilities |
-| Vulnerable Code | Always | Actual code from the codebase, not fabricated |
-| Secure Fix | Always | Working corrected code |
-| Remediation | Always | Actionable steps |
-| Burp PoC | Critical + High only | Copy-pasteable HTTP request |
+| Endpoint / Component | Always | The HTTP route or component affected |
+| Request Flow / Attack Chain | Always | Step-by-step trace with file:line at each step |
+| Impact / Escalated Impact | Always | Specific attacker capabilities |
+| Vulnerable Code | Single findings | Actual code from the codebase, not fabricated |
+| Secure Fix / Unified Remediation | Always | Working corrected code or fix strategy |
+| Burp PoC | Critical + High | Copy-pasteable HTTP request |
+
+---
 
 ## What NOT to Do
 
@@ -57,6 +94,8 @@ Every finding in `.sast-agent/output/findings.md` must be a markdown section wit
 - Do NOT write one-line impacts like "This is a security issue."
 - Do NOT write vague request flows like "Input → Handler → Sink."
 - If you cannot fully trace a flow, mark the finding as `[NEEDS-REVIEW]` instead of `[CONFIRMED]`.
+
+---
 
 ## Grouping Duplicates
 

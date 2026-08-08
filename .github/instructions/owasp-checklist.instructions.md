@@ -1,6 +1,8 @@
-# OWASP Security Checklist
+# OWASP Security & Deep Audit Checklist
 
-Check every controller endpoint / route handler against these categories.
+Check every controller endpoint, service implementation, background worker, configuration file, and data model against these categories.
+
+---
 
 ## OWASP Web Application Top 10 (2021)
 
@@ -15,8 +17,9 @@ Check every controller endpoint / route handler against these categories.
 ### A02: Cryptographic Failures
 - [ ] Sensitive data transmitted over HTTP (not HTTPS)
 - [ ] Weak hashing algorithms (MD5, SHA1 for passwords)
-- [ ] Hardcoded encryption keys or secrets
+- [ ] Hardcoded encryption keys, JWT secrets, or DB passwords
 - [ ] Missing encryption for sensitive data at rest
+- [ ] Weak pseudo-random number generators (`java.util.Random` instead of `SecureRandom`) for security tokens
 
 ### A03: Injection
 - [ ] SQL injection: string concatenation in SQL/JPQL/HQL/native queries
@@ -26,27 +29,29 @@ Check every controller endpoint / route handler against these categories.
 - [ ] XSS (reflected): user input echoed in response without encoding
 - [ ] XSS (stored): database content rendered without sanitization
 - [ ] XSS (DOM): `innerHTML`, `dangerouslySetInnerHTML`, `document.write()` with user data
-- [ ] Template injection: user input in server-side templates (Thymeleaf, EJS, Pug)
-- [ ] SpEL / EL injection: user input evaluated as expression
+- [ ] Template injection: user input in server-side templates (Thymeleaf, FreeMarker)
+- [ ] SpEL / EL injection: user input evaluated via `SpelExpressionParser`
 - [ ] XPath injection: user input in XPath queries
 
 ### A04: Insecure Design
 - [ ] Missing rate limiting on authentication endpoints
 - [ ] No account lockout after failed login attempts
 - [ ] Insecure password reset flow (predictable tokens, no expiry)
-- [ ] Missing CAPTCHA on public forms
+- [ ] Missing CAPTCHA or bot protection on public forms
+- [ ] State-machine bypasses (skipping verification steps in multi-step transactions)
+- [ ] Race conditions / TOCTOU (Time-of-Check to Time-of-Use) in financial/inventory operations
 
 ### A05: Security Misconfiguration
-- [ ] Debug mode enabled in production
+- [ ] Debug mode enabled in production (`debug: true`, `trace: true`)
 - [ ] Default credentials present
-- [ ] Exposed management endpoints (Spring Actuator, `/debug`, `/health` with sensitive data)
+- [ ] Exposed management endpoints (Spring Actuator `/actuator/env`, `/actuator/heapdump`, `/debug`)
 - [ ] Verbose error messages leaking stack traces, file paths, or SQL queries
 - [ ] Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options, HSTS)
-- [ ] XXE: unsafe XML parser configuration (external entities enabled)
+- [ ] XXE: unsafe XML parser configuration (`DocumentBuilderFactory`, `SAXParserFactory` with external entities enabled)
 
 ### A06: Vulnerable Components
-- [ ] Known CVEs in dependencies (check version numbers in pom.xml, package.json)
-- [ ] Outdated frameworks with known security issues
+- [ ] Known CVEs in dependencies (check version numbers in `pom.xml`, `build.gradle`)
+- [ ] Outdated frameworks with known remote code execution bugs
 
 ### A07: Authentication Failures
 - [ ] Weak password requirements (no complexity, short minimum length)
@@ -57,15 +62,18 @@ Check every controller endpoint / route handler against these categories.
 
 ### A08: Software and Data Integrity Failures
 - [ ] Unsafe deserialization: `ObjectInputStream.readObject()`, Jackson `@JsonTypeInfo` with default typing
-- [ ] Missing integrity checks on data from external sources
+- [ ] Second-order deserialization in background message queues (`@KafkaListener`, `@RabbitListener`, JMS)
+- [ ] Missing integrity checks on data from external services
 
 ### A09: Logging and Monitoring Failures
 - [ ] Sensitive data logged (passwords, tokens, PII)
 - [ ] Missing audit logging for security-relevant actions (login, access control decisions)
 
 ### A10: SSRF
-- [ ] User-controlled URLs passed to HTTP client (`RestTemplate`, `WebClient`, `fetch`, `axios`, `http.request`)
+- [ ] User-controlled URLs passed to HTTP client (`RestTemplate`, `WebClient`, `HttpURLConnection`)
 - [ ] URL validation bypass (IP address tricks, DNS rebinding, redirect chains)
+
+---
 
 ## OWASP API Security Top 10 (2023)
 
@@ -76,14 +84,13 @@ Check every controller endpoint / route handler against these categories.
 ### API2: Broken Authentication
 - [ ] Missing authentication on API endpoints
 - [ ] Weak token generation or validation
-- [ ] Token doesn't expire or has very long expiry
 
 ### API3: Broken Object Property Level Authorization
 - [ ] API response exposes internal/sensitive fields (password hashes, internal IDs, roles)
-- [ ] Mass assignment: request body bound directly to data model without field allowlist
+- [ ] Mass assignment: `@RequestBody` bound directly to `@Entity` or data model without DTO allowlist
 
 ### API4: Unrestricted Resource Consumption
-- [ ] No rate limiting on any endpoint
+- [ ] No rate limiting on API endpoints
 - [ ] No pagination — single request can dump entire dataset
 - [ ] File upload with no size limit
 
@@ -98,7 +105,7 @@ Check every controller endpoint / route handler against these categories.
 - [ ] Same as A10 above — user-supplied URLs fetched by server
 
 ### API8: Security Misconfiguration
-- [ ] Same as A05 — plus API-specific: missing input validation, permissive CORS, exposed API docs in production
+- [ ] Missing input validation, permissive CORS, exposed API docs in production
 
 ### API9: Improper Inventory Management
 - [ ] Old or deprecated API versions still accessible
@@ -106,4 +113,22 @@ Check every controller endpoint / route handler against these categories.
 
 ### API10: Unsafe Consumption of APIs
 - [ ] Trusting data from third-party APIs without validation
-- [ ] Following redirects from external APIs blindly
+
+---
+
+## 🔍 Deep-Scan Non-Controller & Indirect Checks
+
+### Background & Async Workers
+- [ ] Unauthenticated background tasks (`@Scheduled`, `@Async`) reading database records or files and executing external actions
+- [ ] Temporary file creation vulnerabilities (`File.createTempFile` with weak permissions or predictable paths)
+- [ ] Unsanitized data in event listeners (`@EventListener`, `@KafkaListener`, `@RabbitListener`)
+
+### Data Structure & Model Security
+- [ ] Mass assignment via Jackson `@JsonAnySetter` or Spring `@ModelAttribute`
+- [ ] PII or sensitive hash exposure in JPA `@Entity` toString or JSON getters
+- [ ] Missing entity validation constraints (`@Valid`, `@NotNull`, `@Size`)
+
+### Composite Exploit Chaining Patterns
+- [ ] **Chain A**: Information Leakage (e.g. internal user ID or secret key format) + Missing Auth Guard on internal API + Mass Assignment -> **Escalated Admin Privilege Escalation**
+- [ ] **Chain B**: Path Traversal in download utility + Unrestricted File Upload -> **Escalated Remote Code Execution (RCE)**
+- [ ] **Chain C**: Predictable Reset Token + Unprotected Password Reset Endpoint -> **Escalated Account Takeover**

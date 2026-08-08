@@ -1,11 +1,11 @@
-# Scan Java Project
+# Deep Multi-Phase Java SAST Audit
 
-Run the `sast-java` agent on the attached Java/Spring source code folders.
+Run the `sast-java` agent on the attached Java/Spring codebase across 4 comprehensive audit phases:
 
-1. Find all `@Controller` / `@RestController` classes and list their endpoints.
-2. Scan controllers in batches of 3, tracing the full request flow: Controller → Service → Repository → DB.
-3. Check every endpoint against the OWASP Web Top 10 + API Top 10 checklist.
-4. Save findings to `.sast-agent/output/findings.md` after every batch.
-5. After all controllers, scan config files for misconfigurations and hardcoded secrets.
+1. **Phase 1 (Controllers & Endpoints)**: Audit `@Controller` / `@RestController` classes in batches of 3, tracing request flows (Controller → Service → Repository → Response).
+2. **Phase 2 (Services, Async & Listeners)**: Audit non-controller service logic, `@Scheduled` background tasks, `@Async` routines, `@KafkaListener` / `@RabbitListener` queue workers, and event handlers.
+3. **Phase 3 (Config, Security Filters & Models)**: Audit `SecurityConfig.java`, custom filters (`OncePerRequestFilter`), `application.yml`, `.env`, JPA `@Entity` models (mass assignment), and cryptographic/file utility classes.
+4. **Phase 4 (Exploit Chaining & Composite Escalation)**: Re-examine all gathered findings to combine 2–3 indirect or lower-severity issues into escalated **Composite Exploit Chains** (`COMPOSITE-{NNN}`).
+5. Save findings immediately after each batch to `.sast-agent/output/findings.md` and keep `.sast-agent/output/scan-progress.md` updated.
 
-Do not modify application source code. Do not invent vulnerabilities.
+Do not modify application source code. Do not invent vulnerabilities without code evidence.
