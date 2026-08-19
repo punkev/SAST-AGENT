@@ -1,28 +1,215 @@
-version: 1
-description: Default low-value paths for web-pentesting-oriented review. Security-relevant config is not globally ignored.
+version: 2
+description: Comprehensive SAST ignore matrix excluding non-code assets, media, documents, test suites, and build artifacts to maximize LLM context efficiency and prevent scanning non-production code.
+
+# Patterns to completely ignore and never read during analysis
 ignore:
-  - '**/test/**'
-  - '**/tests/**'
-  - '**/tst/**'
-  - '**/__tests__/**'
+  # ===========================================================================
+  # 1. Media, Graphic, and Asset Files
+  # ===========================================================================
+  - '**/*.png'
+  - '**/*.jpg'
+  - '**/*.jpeg'
+  - '**/*.gif'
+  - '**/*.svg'
+  - '**/*.ico'
+  - '**/*.webp'
+  - '**/*.bmp'
+  - '**/*.tiff'
+  - '**/*.tif'
+  - '**/*.psd'
+  - '**/*.ai'
+  - '**/*.eps'
+  - '**/*.raw'
+  - '**/*.cr2'
+  - '**/*.heic'
+  - '**/*.heif'
+  - '**/*.avif'
+
+  # ===========================================================================
+  # 2. Audio and Video Files
+  # ===========================================================================
+  - '**/*.mp4'
+  - '**/*.webm'
+  - '**/*.mkv'
+  - '**/*.avi'
+  - '**/*.mov'
+  - '**/*.flv'
+  - '**/*.wmv'
+  - '**/*.m4v'
+  - '**/*.3gp'
+  - '**/*.mp3'
+  - '**/*.wav'
+  - '**/*.ogg'
+  - '**/*.flac'
+  - '**/*.aac'
+  - '**/*.m4a'
+  - '**/*.wma'
+  - '**/*.aiff'
+
+  # ===========================================================================
+  # 3. Documents, Spreadsheets, and Presentations
+  # ===========================================================================
+  - '**/*.pdf'
+  - '**/*.doc'
+  - '**/*.docx'
+  - '**/*.xls'
+  - '**/*.xlsx'
+  - '**/*.ppt'
+  - '**/*.pptx'
+  - '**/*.odt'
+  - '**/*.ods'
+  - '**/*.odp'
+  - '**/*.rtf'
+  - '**/*.pages'
+  - '**/*.numbers'
+  - '**/*.key'
+
+  # ===========================================================================
+  # 4. Fonts
+  # ===========================================================================
+  - '**/*.ttf'
+  - '**/*.otf'
+  - '**/*.woff'
+  - '**/*.woff2'
+  - '**/*.eot'
+  - '**/*.fon'
+
+  # ===========================================================================
+  # 5. Compiled Binaries, Archives, and Intermediate Objects
+  # ===========================================================================
+  - '**/*.jar'
+  - '**/*.war'
+  - '**/*.ear'
+  - '**/*.class'
+  - '**/*.exe'
+  - '**/*.dll'
+  - '**/*.so'
+  - '**/*.dylib'
+  - '**/*.bin'
+  - '**/*.dat'
+  - '**/*.pyc'
+  - '**/*.pyo'
+  - '**/*.zip'
+  - '**/*.tar'
+  - '**/*.gz'
+  - '**/*.tgz'
+  - '**/*.7z'
+  - '**/*.rar'
+  - '**/*.bz2'
+  - '**/*.xz'
+  - '**/*.iso'
+  - '**/*.dmg'
+  - '**/*.pdb'
+  - '**/*.obj'
+  - '**/*.node'
+
+  # ===========================================================================
+  # 6. Test Files, Test Suites, Mocks, and Fixtures (Universal & Framework-Specific)
+  # ===========================================================================
+  # Java Test Patterns
+  - '**/src/test/**'
+  - '**/src/it/**'
+  - '**/*Test.java'
+  - '**/*Tests.java'
+  - '**/*TestCase.java'
+  - '**/Test*.java'
+  - '**/IT*.java'
+  - '**/*IT.java'
   - '**/mock/**'
   - '**/mocks/**'
+  - '**/testdata/**'
   - '**/fixtures/**'
   - '**/sample/**'
   - '**/samples/**'
   - '**/demo/**'
-  - '**/batch/**'
+
+  # Node.js / JavaScript / TypeScript Test Patterns
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/tst/**'
+  - '**/__tests__/**'
+  - '**/__mocks__/**'
+  - '**/*.test.js'
+  - '**/*.test.jsx'
+  - '**/*.test.ts'
+  - '**/*.test.tsx'
+  - '**/*.test.mjs'
+  - '**/*.test.cjs'
+  - '**/*.spec.js'
+  - '**/*.spec.jsx'
+  - '**/*.spec.ts'
+  - '**/*.spec.tsx'
+  - '**/*.spec.mjs'
+  - '**/*.spec.cjs'
+  - '**/cypress/**'
+  - '**/playwright/**'
+  - '**/e2e/**'
+  - '**/*.mock.js'
+  - '**/*.mock.ts'
+
+  # ===========================================================================
+  # 7. Build Artifacts, Dependency Caches, and Bundles
+  # ===========================================================================
+  # Java / JVM Build Directories
   - '**/target/**'
   - '**/build/**'
-  - '**/dist/**'
-  - '**/coverage/**'
+  - '**/bin/**'
+  - '**/out/**'
+  - '**/.gradle/**'
+  - '**/.mvn/**'
+  - '**/.settings/**'
+  - '**/.classpath'
+  - '**/.project'
+  - '**/*.iml'
+  - '**/.factorypath'
+
+  # Node / JavaScript / Frontend Build Directories & Bundles
   - '**/node_modules/**'
+  - '**/dist/**'
+  - '**/.next/**'
+  - '**/.nuxt/**'
+  - '**/.output/**'
+  - '**/.turbo/**'
+  - '**/.cache/**'
+  - '**/coverage/**'
+  - '**/.nyc_output/**'
+  - '**/*.min.js'
+  - '**/*.min.css'
+  - '**/*.map'
+  - '**/*.bundle.js'
+  - '**/package-lock.json'
+  - '**/yarn.lock'
+  - '**/pnpm-lock.yaml'
+  - '**/bun.lockb'
+
+  # ===========================================================================
+  # 8. Version Control & System Metadata
+  # ===========================================================================
   - '**/.git/**'
+  - '**/.svn/**'
+  - '**/.hg/**'
   - '**/.idea/**'
   - '**/.vscode/**'
-  - '**/generated/**'
-  - '**/vendor/**'
+  - '**/.DS_Store'
+  - '**/Thumbs.db'
   - '**/logs/**'
+  - '**/.sast-agent/**'
+
+# Explicit exceptions: Security-relevant configuration files must NEVER be skipped
 exceptions:
   scan_security_relevant_config: true
-  security_relevant_config_hint: Inspect config files for CORS, CSRF, JWT, OAuth, cookie, datasource, parser, and secret settings even when located below a config directory.
+  whitelist_config_patterns:
+    - '**/application*.yml'
+    - '**/application*.yaml'
+    - '**/application*.properties'
+    - '**/bootstrap*.yml'
+    - '**/bootstrap*.yaml'
+    - '**/bootstrap*.properties'
+    - '**/SecurityConfig.java'
+    - '**/WebSecurityConfig*.java'
+    - '**/pom.xml'
+    - '**/build.gradle'
+    - '**/build.gradle.kts'
+    - '**/package.json'
+    - '**/.env*'
+    - '**/web.xml'

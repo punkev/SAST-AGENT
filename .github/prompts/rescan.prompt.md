@@ -1,15 +1,8 @@
-# Rescan Project
+# Rescan Source Code
 
-Run the `sast-resume` agent in **rescan mode** on the attached source code.
+Initiate a fresh rescan pass on the attached codebase using `@sast-resume` in rescan mode.
 
-Reuse the existing controller/route list from `.sast-agent/output/scan-progress.md` but perform a fresh vulnerability analysis:
-1. Reset all progress checkboxes to unchecked.
-2. Archive previous findings (rename `findings.md` to `findings-{date}.md`).
-3. Scan all controllers/routes again from scratch with fresh eyes.
-
-Use this when:
-- The previous scan missed vulnerabilities
-- You want a second-pass analysis
-- You want to verify previous findings
-
-If the source code has changed, run a full scan instead (use `scan-java` or `scan-js`).
+1. Preserve the discovered inventory of controllers, routes, message listeners, and views in `.sast-agent/output/scan-progress.md`.
+2. Reset all progress checkboxes to unchecked (`- [ ]`).
+3. Archive previous findings (`findings.md` -> `findings-archive-{timestamp}.md`).
+4. Re-run Pass 2 deep bidirectional taint analysis with fresh evaluation.

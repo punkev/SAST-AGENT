@@ -1,115 +1,137 @@
-# SAST Agent Framework
+# Enterprise SAST Multi-Agent Framework for VS Code Copilot
 
-A lightweight SAST (Static Application Security Testing) agent for GitHub Copilot Chat that scans Java/Spring and JavaScript/Node.js web applications for security vulnerabilities.
+A specialized, multi-agent Static Application Security Testing (SAST) framework engineered for GitHub Copilot in Visual Studio Code. It performs deep, two-pass taint and data-flow analysis across Java/Spring and JavaScript/Node.js/TypeScript codebases, alongside a dedicated credentials and secret discovery engine.
 
-## How It Works
+---
 
-1. Open VS Code with this repo
-2. Open GitHub Copilot Chat
-3. Attach your source code folder(s)
-4. Run a scan prompt (e.g., `/scan-java` or `/scan-js`)
+## Key Capabilities
 
-The agent traces **controller/route request flows end-to-end** — from HTTP entry point through service layers to database sinks — checking against OWASP Web Top 10 and API Top 10.
+- **Automatic Ecosystem Detection**: Identifies Java/JVM vs. Node.js/TypeScript vs. Polyglot workspaces, build tools (Maven, Gradle, npm, pnpm, yarn), and frameworks (Spring Boot, Quarkus, NestJS, Express, Next.js).
+- **Master Pre-Scan Ignore Matrix**: Automatically excludes all media, documents, fonts, binaries, and build caches before reading files into LLM context.
+- **Dedicated Hardcoded Secrets Engine (`@sast-secrets`)**: Comprehensive detection of API keys, tokens, base64-encoded credentials, private keys, database passwords, and cloud keys across all folders, with clean separation between **Production Secrets** and **Test/Mock Secrets**.
+- **Expanded Attack Surface Coverage**: Audits not just REST controllers, but also **Message Queues** (Kafka, RabbitMQ, SQS, BullMQ), **Background Schedulers**, **Template Engines (SSTI)** (Thymeleaf, JSP, EJS, Pug, Handlebars), and **Security Middleware**.
+- **Two-Pass Taint Engine**: 
+  - **Pass 1**: Surface & Sink Discovery (indexes entry points and locates dangerous sink signatures).
+  - **Pass 2**: Deep Bidirectional Taint Analysis (traces sources forward to sinks and dangerous sinks backward to entry points).
+- **False-Positive Elimination & Triage**: Dedicated `@sast-verifier` agent cross-examines findings against framework mitigations, parameter binding, and DTO validators.
+- **Actionable Reporting & Exploitation PoCs**: Markdown report with CVSS v3.1 vectors, CWE classification, bidirectional source-to-sink traces, production-ready fix diffs, and copy-pasteable Burp Suite PoCs for Critical and High severity findings.
 
-## Scan Modes
+---
 
-| Mode | Prompt | Description |
+## Architecture Overview
+
+```
+                               ┌──────────────────────────────────────────────┐
+                               │            GitHub Copilot Chat               │
+                               │  (User attaches source code folder & /scan)  │
+                               └──────────────────────┬───────────────────────┘
+                                                      │
+                                                      ▼
+                               ┌──────────────────────────────────────────────┐
+                               │             @sast-orchestrator               │
+                               │  - Step 0: Enforce Master Ignore Matrix      │
+                               │  - Step 1: Detect Language & Framework Stack │
+                               │  - Step 2: Initialize Attack Surface & State │
+                               │  - Step 3: Dispatch to Specialized Agents    │
+                               └──────┬───────────────┬───────────────┬───────┘
+                                      │               │               │
+                     Java / JVM Stack │               │ Secrets Scan  │ Node / JS / TS Stack
+                                      ▼               ▼               ▼
+           ┌─────────────────────────────┐ ┌─────────────────────┐ ┌─────────────────────────────┐
+           │         @sast-java          │ │    @sast-secrets    │ │          @sast-js           │
+           │  Pass 1: Sinks & Sources    │ │  Audits all folders │ │  Pass 1: Sinks & Sources    │
+           │    - REST / JAX-RS / WebFlux│ │  including tests:   │ │    - Express / NestJS / Next│
+           │    - Kafka / RabbitMQ / SQS │ │  - Section 1: Prod  │ │    - BullMQ / KafkaJS       │
+           │    - Thymeleaf / JSP SSTI   │ │  - Section 2: Test  │ │    - EJS / Pug SSTI         │
+           │  Pass 2: Bidirectional Taint│ │  Outputs to         │ │  Pass 2: Bidirectional Taint│
+           │    - Source -> Service -> DB│ │  secrets-findings.md│ │    - Route -> Service -> DB │
+           └──────────────┬──────────────┘ └─────────────────────┘ └──────────────┬──────────────┘
+                          │                                                       │
+                          └───────────────────────────┬───────────────────────────┘
+                                                      │ Candidate Findings
+                                                      ▼
+                               ┌──────────────────────────────────────────────┐
+                               │               @sast-verifier                 │
+                               │  - Validate Data Flow & Eliminate FPs        │
+                               │  - Verify Framework Sanitizers & Validations │
+                               │  - Assign CWE, OWASP & CVSS v3.1 Vector      │
+                               │  - Generate Burp Suite PoC (Crit / High)     │
+                               │  - Write / Append to output/findings.md      │
+                               └──────────────────────────────────────────────┘
+```
+
+---
+
+## How to Use
+
+1. Open this repository in VS Code (or have its instructions loaded).
+2. Open **GitHub Copilot Chat**.
+3. **Attach your target project's root folder**.
+4. Run a command or invoke a specialized agent:
+
+### Available Prompts
+
+| Command | Prompt File | Description |
 |---|---|---|
-| **Java Scan** | `scan-java` | Scans Java/Spring projects. Finds all `@Controller`/`@RestController` classes, traces their endpoint flows, checks OWASP. |
-| **JS Scan** | `scan-js` | Scans Node.js/Express, Next.js, React, Angular projects. Finds all route handlers, traces flows, checks OWASP. |
-| **Resume** | `resume-scan` | Continues an interrupted scan from the last checkpoint. |
-| **Rescan** | `rescan` | Re-analyzes the same project without re-doing discovery. |
+| `/scan` | `.github/prompts/scan.prompt.md` | **(Recommended)** Runs full automated scan with language auto-detection, surface indexing, taint flow, and secrets discovery |
+| `/scan-secrets` | `.github/prompts/scan-secrets.prompt.md` | Dedicated hardcoded secrets and credentials scan across all folders (with separate production vs. test sections) |
+| `/scan-java` | `.github/prompts/scan-java.prompt.md` | Targeted Two-Pass Java / Spring Boot scan |
+| `/scan-js` | `.github/prompts/scan-js.prompt.md` | Targeted Two-Pass Node.js / TypeScript scan |
+| `/resume-scan` | `.github/prompts/resume-scan.prompt.md` | Resumes an interrupted scan from the last checkpoint in `scan-progress.md` |
+| `/rescan` | `.github/prompts/rescan.prompt.md` | Re-evaluates all indexed surfaces with fresh analysis and archives existing report |
 
-## Project Structure
+---
+
+## Repository Structure
 
 ```
 SAST-AGENT/
 ├── .github/
-│   ├── copilot-instructions.md              # Master Copilot config
+│   ├── copilot-instructions.md              # Master Copilot chat config & orchestration rules
 │   ├── agents/
-│   │   ├── sast-java.agent.md               # Java/Spring scanner agent
-│   │   ├── sast-js.agent.md                 # JS/Node scanner agent
-│   │   └── sast-resume.agent.md             # Resume/rescan agent
+│   │   ├── sast-orchestrator.agent.md       # Ecosystem detector & orchestrator agent
+│   │   ├── sast-java.agent.md               # Two-pass Java/Spring scanner agent
+│   │   ├── sast-js.agent.md                 # Two-pass Node.js/TypeScript scanner agent
+│   │   ├── sast-secrets.agent.md            # Hardcoded secrets scanner (Prod vs. Test)
+│   │   ├── sast-verifier.agent.md           # Verification, FP elimination & PoC agent
+│   │   └── sast-resume.agent.md             # Resume / rescan coordinator agent
 │   ├── instructions/
-│   │   ├── finding-format.instructions.md   # How findings are structured
-│   │   └── owasp-checklist.instructions.md  # OWASP Top 10 + API Top 10
+│   │   ├── ignore-patterns.instructions.md  # Strict pre-scan exclusion rules
+│   │   ├── secret-detection.instructions.md # Secret regexes, signatures & heuristics
+│   │   ├── finding-format.instructions.md   # Report schema, CVSS v3.1 & Burp PoC rules
+│   │   └── owasp-checklist.instructions.md  # Comprehensive OWASP 2021 & API 2023 checklist
 │   └── prompts/
-│       ├── scan-java.prompt.md              # "Scan this Java project"
-│       ├── scan-js.prompt.md                # "Scan this JS project"
-│       ├── resume-scan.prompt.md            # "Continue interrupted scan"
-│       └── rescan.prompt.md                 # "Rescan same project"
+│       ├── scan.prompt.md                   # Full automated scan prompt
+│       ├── scan-secrets.prompt.md           # Dedicated secrets scan prompt
+│       ├── scan-java.prompt.md              # Targeted Java scan prompt
+│       ├── scan-js.prompt.md                # Targeted Node.js scan prompt
+│       ├── resume-scan.prompt.md            # Resume interrupted scan prompt
+│       └── rescan.prompt.md                 # Rescan codebase prompt
 ├── .vscode/
-│   └── settings.json                        # Copilot settings
+│   └── settings.json                        # Copilot instruction registrations
 ├── .sast-agent/
-│   └── config/
-│       └── ignore-paths.yml                 # Paths to skip during scanning
+│   ├── config/
+│   │   └── ignore-paths.yml                 # Master pre-scan ignore matrix
+│   └── output/                              # (Generated during scans - gitignored)
+│       ├── scan-progress.md                 # Live surface inventory & batch progress checklist
+│       ├── findings.md                      # Final verified markdown vulnerability report
+│       └── secrets-findings.md              # Dedicated dual-section secrets report
 ├── .gitignore
 └── README.md
 ```
 
-### Runtime Output (gitignored)
+---
 
-During a scan, the agent creates:
+## Output Reports
 
-```
-.sast-agent/output/
-├── scan-progress.md     # Checklist of controllers/routes (tracks progress)
-├── findings.md          # All vulnerability findings (THE report)
-└── findings.json        # Machine-readable findings (optional)
-```
+During a scan, two distinct reports are produced under `.sast-agent/output/`:
 
-## What Gets Checked
+1. `findings.md`: Full architectural and code-level vulnerability report (SQLi, SSTI, RCE, SSRF, Deserialization, Broken Auth, BOLA) with CVSS v3.1 scores, verified source-to-sink call traces, secure fix diffs, and Burp Suite PoCs.
+2. `secrets-findings.md`: Dedicated credentials report separated into:
+   - **Section 1: Production & Configuration Secrets (High Risk)**: Discovered in production code, `.env`, or configuration files.
+   - **Section 2: Test Files & Fixtures Secrets (Credential Leak Risk)**: Discovered in test folders, mocks, or sample fixtures with analysis on whether the secret is a mock value or an exposed live credential.
 
-The agents check against **OWASP Web Application Top 10 (2021)** and **OWASP API Security Top 10 (2023)**:
-
-- **Injection**: SQL, NoSQL, OS command, template, SpEL, XPath, LDAP
-- **Broken Access Control**: Missing auth, IDOR/BOLA, privilege escalation, CORS
-- **XSS**: Reflected, stored, DOM-based
-- **SSRF**: User-controlled URLs in server-side HTTP clients
-- **Broken Authentication**: Weak JWT, session issues, brute-force
-- **Security Misconfiguration**: Debug mode, exposed endpoints, missing headers, XXE
-- **Mass Assignment**: Direct model binding without field allowlists
-- **Sensitive Data Exposure**: Passwords in responses, tokens in URLs, secrets in code
-- **Deserialization**: Unsafe `ObjectInputStream`, Jackson default typing
-
-## Finding Format
-
-Each finding includes:
-
-| Field | Required For |
-|---|---|
-| Title + Severity + CWE/OWASP | All findings |
-| File path + line numbers | All findings |
-| Endpoint (HTTP route) | All findings |
-| Request flow (source → sink trace) | All findings |
-| Impact description | All findings |
-| Vulnerable code block | All findings |
-| Secure fix code block | All findings |
-| Remediation steps | All findings |
-| Burp Suite PoC HTTP request | Critical + High only |
-
-## Design Philosophy
-
-- **Controller-centric**: Scan routes/controllers first, not every file. This is where vulnerabilities live.
-- **Small batches**: 3 controllers per batch. Save after each batch. Prevents context exhaustion.
-- **Markdown state**: Progress tracked in a simple markdown checklist. LLMs read/write markdown naturally.
-- **Lean instructions**: Agent files are focused. Less instruction overhead = more context for actual analysis.
-- **No fabrication**: Every finding must reference real code. No generic placeholders allowed.
-
-## Configuration
-
-### Ignore Paths
-
-Edit `.sast-agent/config/ignore-paths.yml` to customize which paths are skipped:
-
-```yaml
-ignore:
-  - '**/test/**'
-  - '**/node_modules/**'
-  - '**/target/**'
-  - '**/build/**'
-  - '**/dist/**'
-```
+---
 
 ## License
 

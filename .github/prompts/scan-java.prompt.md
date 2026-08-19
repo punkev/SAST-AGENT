@@ -1,11 +1,11 @@
-# Deep Multi-Phase Java SAST Audit
+# Scan Java Project
 
-Run the `sast-java` agent on the attached Java/Spring codebase across 4 comprehensive audit phases:
+Execute a targeted Java / Spring SAST scan on the attached source code using `@sast-java` and `@sast-verifier`.
 
-1. **Phase 1 (Controllers & Endpoints)**: Audit `@Controller` / `@RestController` classes in batches of 3, tracing request flows (Controller → Service → Repository → Response).
-2. **Phase 2 (Services, Async & Listeners)**: Audit non-controller service logic, `@Scheduled` background tasks, `@Async` routines, `@KafkaListener` / `@RabbitListener` queue workers, and event handlers.
-3. **Phase 3 (Config, Security Filters & Models)**: Audit `SecurityConfig.java`, custom filters (`OncePerRequestFilter`), `application.yml`, `.env`, JPA `@Entity` models (mass assignment), and cryptographic/file utility classes.
-4. **Phase 4 (Exploit Chaining & Composite Escalation)**: Re-examine all gathered findings to combine 2–3 indirect or lower-severity issues into escalated **Composite Exploit Chains** (`COMPOSITE-{NNN}`).
-5. Save findings immediately after each batch to `.sast-agent/output/findings.md` and keep `.sast-agent/output/scan-progress.md` updated.
+1. Read `.sast-agent/config/ignore-paths.yml` and ignore all media, test suites (`src/test/**`), and build directories (`target/**`, `build/**`).
+2. **Pass 1**: Index all REST endpoints (`@Controller`, `@RestController`), Message Queue listeners (`@KafkaListener`, `@RabbitListener`, `@SqsListener`), Schedulers (`@Scheduled`), and Template Views (Thymeleaf/JSP).
+3. **Pass 2**: Perform deep bidirectional taint analysis (Source -> Service -> DAO -> Sink and Sink -> Caller) in batches of 3-4 items.
+4. Route candidate findings through `@sast-verifier` to eliminate false positives, compute CVSS v3.1 scores, generate Burp PoCs for Critical/High findings, and write to `.sast-agent/output/findings.md`.
+5. Audit configuration files (`application.yml`, `SecurityConfig.java`, `pom.xml`, `build.gradle`).
 
-Do not modify application source code. Do not invent vulnerabilities without code evidence.
+Do not modify application source code. All findings must reference real code evidence.

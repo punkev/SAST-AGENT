@@ -1,134 +1,136 @@
-# OWASP Security & Deep Audit Checklist
+# Comprehensive OWASP & CWE Vulnerability Checklist
 
-Check every controller endpoint, service implementation, background worker, configuration file, and data model against these categories.
-
----
-
-## OWASP Web Application Top 10 (2021)
-
-### A01: Broken Access Control
-- [ ] Missing authentication on sensitive endpoints
-- [ ] Missing authorization checks (no `@PreAuthorize`, no middleware, no role check)
-- [ ] IDOR / BOLA: User A can access User B's resources by changing an ID parameter
-- [ ] Privilege escalation: regular user accessing admin functionality
-- [ ] CORS misconfiguration allowing unauthorized origins
-- [ ] Directory traversal via file path parameters
-
-### A02: Cryptographic Failures
-- [ ] Sensitive data transmitted over HTTP (not HTTPS)
-- [ ] Weak hashing algorithms (MD5, SHA1 for passwords)
-- [ ] Hardcoded encryption keys, JWT secrets, or DB passwords
-- [ ] Missing encryption for sensitive data at rest
-- [ ] Weak pseudo-random number generators (`java.util.Random` instead of `SecureRandom`) for security tokens
-
-### A03: Injection
-- [ ] SQL injection: string concatenation in SQL/JPQL/HQL/native queries
-- [ ] NoSQL injection: user input in MongoDB query operators (`$gt`, `$ne`, `$regex`)
-- [ ] OS command injection: user input in `Runtime.exec()`, `ProcessBuilder`, `child_process.exec()`
-- [ ] LDAP injection: user input in LDAP queries
-- [ ] XSS (reflected): user input echoed in response without encoding
-- [ ] XSS (stored): database content rendered without sanitization
-- [ ] XSS (DOM): `innerHTML`, `dangerouslySetInnerHTML`, `document.write()` with user data
-- [ ] Template injection: user input in server-side templates (Thymeleaf, FreeMarker)
-- [ ] SpEL / EL injection: user input evaluated via `SpelExpressionParser`
-- [ ] XPath injection: user input in XPath queries
-
-### A04: Insecure Design
-- [ ] Missing rate limiting on authentication endpoints
-- [ ] No account lockout after failed login attempts
-- [ ] Insecure password reset flow (predictable tokens, no expiry)
-- [ ] Missing CAPTCHA or bot protection on public forms
-- [ ] State-machine bypasses (skipping verification steps in multi-step transactions)
-- [ ] Race conditions / TOCTOU (Time-of-Check to Time-of-Use) in financial/inventory operations
-
-### A05: Security Misconfiguration
-- [ ] Debug mode enabled in production (`debug: true`, `trace: true`)
-- [ ] Default credentials present
-- [ ] Exposed management endpoints (Spring Actuator `/actuator/env`, `/actuator/heapdump`, `/debug`)
-- [ ] Verbose error messages leaking stack traces, file paths, or SQL queries
-- [ ] Missing security headers (CSP, X-Frame-Options, X-Content-Type-Options, HSTS)
-- [ ] XXE: unsafe XML parser configuration (`DocumentBuilderFactory`, `SAXParserFactory` with external entities enabled)
-
-### A06: Vulnerable Components
-- [ ] Known CVEs in dependencies (check version numbers in `pom.xml`, `build.gradle`)
-- [ ] Outdated frameworks with known remote code execution bugs
-
-### A07: Authentication Failures
-- [ ] Weak password requirements (no complexity, short minimum length)
-- [ ] Missing brute-force protection
-- [ ] Session fixation (session ID not regenerated after login)
-- [ ] Insecure session cookies (missing `httpOnly`, `secure`, `sameSite`)
-- [ ] JWT issues: weak secret, missing expiry, algorithm confusion (`alg: none`), no audience/issuer validation
-
-### A08: Software and Data Integrity Failures
-- [ ] Unsafe deserialization: `ObjectInputStream.readObject()`, Jackson `@JsonTypeInfo` with default typing
-- [ ] Second-order deserialization in background message queues (`@KafkaListener`, `@RabbitListener`, JMS)
-- [ ] Missing integrity checks on data from external services
-
-### A09: Logging and Monitoring Failures
-- [ ] Sensitive data logged (passwords, tokens, PII)
-- [ ] Missing audit logging for security-relevant actions (login, access control decisions)
-
-### A10: SSRF
-- [ ] User-controlled URLs passed to HTTP client (`RestTemplate`, `WebClient`, `HttpURLConnection`)
-- [ ] URL validation bypass (IP address tricks, DNS rebinding, redirect chains)
+Use this checklist during **Pass 1 (Sink & Source Discovery)** and **Pass 2 (Bidirectional Taint Analysis)** across Java/Spring and Node.js/TypeScript codebases.
 
 ---
 
-## OWASP API Security Top 10 (2023)
+## 1. Injection Vulnerabilities (CWE-89, CWE-94, CWE-78, CWE-918, CWE-1336)
 
-### API1: Broken Object-Level Authorization (BOLA)
-- [ ] Endpoint accepts object ID and returns data without verifying the caller owns that object
-- [ ] Bulk operations that don't check ownership per item
+### SQL / JPQL / HQL / MyBatis Injection (CWE-89)
+- **Java**:
+  - String concatenation or formatted strings in `JdbcTemplate.query()`, `Statement.executeQuery()`, `EntityManager.createNativeQuery()`, `EntityManager.createQuery()`.
+  - Hibernate/JPA queries with unparameterized `SELECT ... WHERE field = ' + userInput`.
+  - Dynamic `ORDER BY` or `GROUP BY` clauses with user-controlled input (prepared statements cannot parameterize column names).
+  - **MyBatis Injection**: Using `${param}` (raw string substitution) instead of `#{param}` (prepared statement parameter) in XML mappers or `@Select` / `@Update` annotations.
+  - **Spring Data SpEL Injection**: User input evaluated inside `@Query("... ?#{[0]} ...")`.
+- **Node.js**:
+  - String concatenation in raw SQL queries: `db.query("SELECT * FROM users WHERE name = '" + req.body.name + "'")`.
+  - Unsafe Sequelize/TypeORM/Knex raw expressions: `sequelize.literal()`, `knex.raw()`, `prisma.$queryRawUnsafe()`.
 
-### API2: Broken Authentication
-- [ ] Missing authentication on API endpoints
-- [ ] Weak token generation or validation
+### NoSQL Injection (CWE-943)
+- **Node.js / MongoDB**:
+  - Passing unvalidated objects directly into query operators: `db.collection.find({ user: req.body.username, pass: req.body.password })` where `req.body.password = { "$ne": null }`.
+  - Use of `$where`, `mapReduce`, or `$accumulator` with user-supplied JavaScript strings.
 
-### API3: Broken Object Property Level Authorization
-- [ ] API response exposes internal/sensitive fields (password hashes, internal IDs, roles)
-- [ ] Mass assignment: `@RequestBody` bound directly to `@Entity` or data model without DTO allowlist
+### Server-Side Template Injection — SSTI (CWE-1336)
+- **Java**:
+  - **Thymeleaf Fragment Injection**: Returning user-controlled strings directly as view names in Spring MVC without `@ResponseBody`.
+  - Unescaped rendering in Thymeleaf using `th:utext` or JSP `<%= ... %>`.
+  - Freemarker / Velocity template loading from untrusted strings or parameters.
+  - SpEL evaluation: `SpelExpressionParser.parseExpression(userInput).getValue()`.
+- **Node.js**:
+  - EJS: rendering unsanitized strings with `ejs.render(userInput, data)` instead of precompiled templates.
+  - Pug / Handlebars / Nunjucks: compiling user-controlled template strings directly (`pug.compile(userInput)`).
 
-### API4: Unrestricted Resource Consumption
-- [ ] No rate limiting on API endpoints
-- [ ] No pagination — single request can dump entire dataset
-- [ ] File upload with no size limit
-
-### API5: Broken Function-Level Authorization
-- [ ] Regular user can access admin API endpoints
-- [ ] No role check before executing privileged operations
-
-### API6: Unrestricted Access to Sensitive Business Flows
-- [ ] No protection against automated abuse (bot purchasing, mass account creation)
-
-### API7: Server-Side Request Forgery (SSRF)
-- [ ] Same as A10 above — user-supplied URLs fetched by server
-
-### API8: Security Misconfiguration
-- [ ] Missing input validation, permissive CORS, exposed API docs in production
-
-### API9: Improper Inventory Management
-- [ ] Old or deprecated API versions still accessible
-- [ ] Debug/test endpoints exposed in production
-
-### API10: Unsafe Consumption of APIs
-- [ ] Trusting data from third-party APIs without validation
+### Command & Code Injection (CWE-78, CWE-94)
+- **Java**:
+  - `Runtime.getRuntime().exec(userInput)` or `new ProcessBuilder(userInput)`.
+  - **JNDI Injection**: `InitialContext.lookup(userInput)` with untrusted LDAP/RMI/DNS URLs.
+  - OGNL / MVEL evaluation of untrusted strings.
+- **Node.js**:
+  - `child_process.exec(userInput)`, `child_process.execSync(userInput)`, `child_process.spawn(userInput, { shell: true })`.
+  - `eval(userInput)`, `new Function(userInput)()`, `vm.runInThisContext(userInput)`, `vm2` (known sandbox escapes).
 
 ---
 
-## 🔍 Deep-Scan Non-Controller & Indirect Checks
+## 2. Asynchronous & Message Queue Vulnerabilities (CWE-502, CWE-20)
 
-### Background & Async Workers
-- [ ] Unauthenticated background tasks (`@Scheduled`, `@Async`) reading database records or files and executing external actions
-- [ ] Temporary file creation vulnerabilities (`File.createTempFile` with weak permissions or predictable paths)
-- [ ] Unsanitized data in event listeners (`@EventListener`, `@KafkaListener`, `@RabbitListener`)
+### Kafka / RabbitMQ / SQS Consumer Injection & Deserialization
+- **Java**:
+  - `@KafkaListener`, `@RabbitListener`, `@JmsListener`, `@SqsListener` receiving untrusted payload strings without validation and passing directly into SQL/exec/XML sinks.
+  - Using Java native serialization or polymorphic JSON deserialization on message queue payloads.
+- **Node.js**:
+  - BullMQ, KafkaJS, or `amqplib` workers parsing unvalidated message payloads and performing file system writes, child process calls, or raw database queries.
 
-### Data Structure & Model Security
-- [ ] Mass assignment via Jackson `@JsonAnySetter` or Spring `@ModelAttribute`
-- [ ] PII or sensitive hash exposure in JPA `@Entity` toString or JSON getters
-- [ ] Missing entity validation constraints (`@Valid`, `@NotNull`, `@Size`)
+---
 
-### Composite Exploit Chaining Patterns
-- [ ] **Chain A**: Information Leakage (e.g. internal user ID or secret key format) + Missing Auth Guard on internal API + Mass Assignment -> **Escalated Admin Privilege Escalation**
-- [ ] **Chain B**: Path Traversal in download utility + Unrestricted File Upload -> **Escalated Remote Code Execution (RCE)**
-- [ ] **Chain C**: Predictable Reset Token + Unprotected Password Reset Endpoint -> **Escalated Account Takeover**
+## 3. Deserialization & Software Integrity Failures (CWE-502)
+
+- **Java**:
+  - Native deserialization: `ObjectInputStream.readObject()`, `XMLDecoder.readObject()`.
+  - **Jackson Polymorphic Deserialization**: `@JsonTypeInfo(use = Id.CLASS)`, `@JsonTypeInfo(use = Id.MINIMAL_CLASS)`, `ObjectMapper.enableDefaultTyping()`, or `objectMapper.activateDefaultTyping()`.
+  - **SnakeYAML RCE Gadgets**: `new Yaml().load(untrustedString)` without `SafeConstructor`.
+  - **XML Parsers (XXE - CWE-611)**: `DocumentBuilderFactory`, `SAXParserFactory`, `XMLInputFactory`, `TransformerFactory`, `SchemaFactory` without explicitly calling `setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)`.
+- **Node.js**:
+  - `node-serialize.unserialize()`, `serialize-javascript`, or unsafe YAML parsers (`js-yaml.load()` on untrusted input).
+
+---
+
+## 4. Prototype Pollution & Object Manipulation (CWE-1321)
+
+- **Node.js**:
+  - Recursive object merge/extend on user input: `_.merge({}, req.body)`, `Object.assign({}, req.body)`.
+  - Custom deep-clone or property assignment utility functions that do not sanitize `__proto__`, `constructor`, `prototype`.
+  - Fastify / Express request body parsers without prototype pollution guards.
+
+---
+
+## 5. Broken Access Control & BOLA / IDOR (CWE-284, CWE-639, CWE-862)
+
+- **Missing Endpoint Authorization**:
+  - Java Spring: Endpoints lacking `@PreAuthorize("hasRole(...)")`, `@Secured`, or unprotected in `SecurityFilterChain`.
+  - Node.js: Express/NestJS routes lacking auth guards / middleware on state-changing endpoints (`POST`, `PUT`, `DELETE`).
+- **IDOR / Broken Object-Level Authorization (BOLA)**:
+  - Endpoints receiving an ID parameter (`/api/documents/{id}`, `req.params.id`) and fetching/modifying the entity without asserting tenant/user ownership (`WHERE id = :id AND user_id = :currentUserId`).
+- **URL Normalization & Filter Bypasses**:
+  - Spring Security vs Interceptor inconsistencies: Matrix variable injection (`/admin;foo/users`), URL casing tricks on Windows, trailing slashes.
+- **Mass Assignment (CWE-915)**:
+  - Spring: `@RequestBody` or `@ModelAttribute` binding directly to JPA entity classes with sensitive fields (e.g., `role`, `isAdmin`, `balance`).
+  - Node.js: `User.create(req.body)` or `User.update(req.body)` without strict schema filtering or DTOs.
+
+---
+
+## 6. Server-Side Request Forgery — SSRF (CWE-918)
+
+- **Java**:
+  - User-controlled URLs passed to `RestTemplate`, `WebClient`, `HttpURLConnection`, `HttpClient`, `URL.openStream()`, Apache `HttpClient`.
+  - Bypasses of naive blacklists (handling `169.254.169.254`, `127.0.0.1`, `0.0.0.0`, `localhost`, `[::1]`, DNS rebinding).
+- **Node.js**:
+  - User-controlled URLs passed to `fetch`, `axios.get(req.body.url)`, `got()`, `request()`, `needle()`.
+
+---
+
+## 7. Path Traversal & Zip Slip (CWE-22, CWE-29)
+
+- **Java**:
+  - **Multipart File Upload Traversal**: Using `MultipartFile.getOriginalFilename()` directly without `new File(filename).getName()` or `Path.getFileName()`.
+  - **Zip Slip**: Extracting entries from `ZipInputStream` using `entry.getName()` without asserting `destinationFile.getCanonicalPath().startsWith(targetDir.getCanonicalPath())`.
+- **Node.js**:
+  - `fs.readFile(path.join(__dirname, req.query.file))`, `res.sendFile(req.query.path)`.
+  - Unsanitized archive extraction (`unzipper`, `tar`, `adm-zip`).
+
+---
+
+## 8. Cross-Site Scripting — XSS (CWE-79)
+
+- **Java**:
+  - Spring MVC controllers returning unescaped user data in Thymeleaf `th:utext` or JSP `<%= ... %>`.
+- **Node.js**:
+  - Frontend: `dangerouslySetInnerHTML`, `innerHTML`, `v-html`, `document.write()`.
+  - Backend: `res.send("<h1>Hello " + req.query.name + "</h1>")`.
+
+---
+
+## 9. Security Misconfiguration & Cryptographic Failures (CWE-16, CWE-327, CWE-798)
+
+- **Java Cryptography Defaults**:
+  - Calling `Cipher.getInstance("AES")` without specifying mode (defaults to insecure **`AES/ECB/PKCS5Padding`** in Java).
+  - Using static IVs (`new IvParameterSpec(new byte[16])`) or weak RNGs (`java.util.Random`) for tokens.
+  - MD5 / SHA-1 used for password hashing (must use BCrypt, Argon2, PBKDF2).
+- **Spring Actuator & DevTools Exposure**:
+  - `management.endpoints.web.exposure.include=*` exposing `/actuator/heapdump`, `/actuator/env`, `/actuator/mappings`, `/actuator/threaddump`.
+  - DevTools active in production classpath or remote debug enabled.
+- **Node.js Security Misconfiguration**:
+  - Permissive CORS (`Access-Control-Allow-Origin: *` with credentials enabled or reflecting `req.headers.origin`).
+  - Disabled CSRF on session-authenticated applications.
+  - Missing security headers (`Helmet`, `Strict-Transport-Security`, `Content-Security-Policy`).
