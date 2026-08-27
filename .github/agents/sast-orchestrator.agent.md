@@ -77,8 +77,9 @@ Inspect root project manifests to determine the project stack:
 
 ### Step 2: Initialize Attack Surface Tracking
 Create `.sast-agent/output/scan-progress.md` with:
-- Global Configuration & SCA
-- HTTP & REST Entry Points
+- Global Configuration & Security Controls
+- HTTP & REST / WebFlux Entry Points
+- File Upload & Multipart Handlers
 - Message Queues & Event Listeners
 - Background Workers & Schedulers
 - Template Engine Views (SSTI)

@@ -42,10 +42,10 @@ Each finding must follow this standard template:
 **Severity**: `{CRITICAL | HIGH | MEDIUM | LOW | NEEDS-REVIEW}`
 **CVSS v3.1**: `{Score}` (`{Vector String, e.g., CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H}`)
 **CWE**: `CWE-{ID}`: {CWE Name}
-**OWASP**: `{Web Top 10 Category | API Security Category}`
+**Taxonomy / Standard**: `{OWASP Web Top 10 | OWASP API Top 10 | CWE Top 25 | SANS Top 25}`
 **File**: [`{basename.ext}:{start}-{end}`](file:///{absolute/path/to/file.ext}#L{start}-L{end}) (Lines {start}-{end})
-**Surface Type**: `{REST / MVC Endpoint | WebFlux Route | Message Queue Consumer | Background Scheduler | Template Engine View | Security Filter / Interceptor | Configuration}`
-**Entry Point**: `{HTTP_METHOD} {route}` OR `{Listener: queue_name}` OR `{View: template_name}`
+**Surface Type**: `{REST / MVC Endpoint | WebFlux Route | Message Queue Consumer | Background Scheduler | Template Engine View | File Upload Handler | Security Filter / Interceptor | Configuration}`
+**Entry Point**: `{HTTP_METHOD} {route}` OR `{Listener: queue_name}` OR `{View: template_name}` OR `{Handler: upload_or_filter_name}`
 
 ### Request Flow (Source to Sink)
 1. **Source**: `{Entry point signature / parameter}` in [`{source_file}:{line}`](file:///{path/to/source_file}#L{line})

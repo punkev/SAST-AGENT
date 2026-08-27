@@ -9,11 +9,21 @@ A specialized, multi-agent Static Application Security Testing (SAST) framework 
 - **Automatic Ecosystem Detection**: Identifies Java/JVM vs. Node.js/TypeScript vs. Polyglot workspaces, build tools (Maven, Gradle, npm, pnpm, yarn), and frameworks (Spring Boot, Quarkus, NestJS, Express, Next.js).
 - **Master Pre-Scan Ignore Matrix**: Automatically excludes all media, documents, fonts, binaries, and build caches before reading files into LLM context.
 - **Dedicated Hardcoded Secrets Engine (`@sast-secrets`)**: Comprehensive detection of API keys, tokens, base64-encoded credentials, private keys, database passwords, and cloud keys across all folders, with clean separation between **Production Secrets** and **Test/Mock Secrets**.
-- **Expanded Attack Surface Coverage**: Audits not just REST controllers, but also **Message Queues** (Kafka, RabbitMQ, SQS, BullMQ), **Background Schedulers**, **Template Engines (SSTI)** (Thymeleaf, JSP, EJS, Pug, Handlebars), and **Security Middleware**.
+- **Expanded Attack Surface Coverage**: Audits REST/HTTP controllers, WebFlux reactive routes, **Message Queues** (Kafka, RabbitMQ, SQS, BullMQ), **Background Schedulers**, **Template Engines (SSTI)** (Thymeleaf, JSP, EJS, Pug, Handlebars), **File Upload Handlers**, and **Security Middleware**.
+- **Comprehensive Vulnerability Taxonomy Beyond OWASP Top 10**:
+  - **OWASP Web & API Top 10**: SQLi, NoSQLi, Command Injection, SSTI, Deserialization (Jackson, SnakeYAML, native), Broken Object-Level Auth (BOLA/IDOR), SSRF, Path Traversal / Zip Slip, XSS.
+  - **CWE Top 25 & SANS Top 25 Extensions**:
+    - **Resource Exhaustion & ReDoS (CWE-1333, CWE-400, CWE-834)**: Catastrophic regex backtracking, unbounded stream buffering, Node.js event-loop starvation.
+    - **Concurrency & Race Conditions (CWE-362, CWE-367, CWE-366)**: Spring singleton bean mutable state pollution, Check-Then-Act TOCTOU double-spend flaws without database locks.
+    - **Insecure File Upload & Temp Files (CWE-434, CWE-436, CWE-377)**: MIME spoofing, SVG script execution, world-readable temp files.
+    - **Log Injection & Information Exposure (CWE-117, CWE-532, CWE-209)**: CRLF log forging in SLF4J/Winston, sensitive data in logs, verbose stack traces in HTTP responses.
+    - **SSL/TLS Validation & Insecure Transport (CWE-295, CWE-319, CWE-1385)**: All-trusting `TrustManager`, `rejectUnauthorized: false`, Cross-Site WebSocket Hijacking (CSWSH).
+    - **Weak Randomness & Session Lifecycle (CWE-330, CWE-384, CWE-613, CWE-1004)**: `java.util.Random`/`Math.random()` in security tokens/OTPs, session fixation, missing cookie flags (`HttpOnly`, `Secure`, `SameSite`).
+    - **Open URL Redirection & HTTP Response Splitting (CWE-601, CWE-113, CWE-644)**: Unvalidated redirects, header injection, cache deception.
 - **Two-Pass Taint Engine**: 
   - **Pass 1**: Surface & Sink Discovery (indexes entry points and locates dangerous sink signatures).
   - **Pass 2**: Deep Bidirectional Taint Analysis (traces sources forward to sinks and dangerous sinks backward to entry points).
-- **False-Positive Elimination & Triage**: Dedicated `@sast-verifier` agent cross-examines findings against framework mitigations, parameter binding, and DTO validators.
+- **False-Positive Elimination & Triage**: Dedicated `@sast-verifier` agent cross-examines candidate findings against framework mitigations, parameter binding, concurrency locks, and DTO validators.
 - **Actionable Reporting & Exploitation PoCs**: Markdown report with CVSS v3.1 vectors, CWE classification, bidirectional source-to-sink traces, production-ready fix diffs, and copy-pasteable Burp Suite PoCs for Critical and High severity findings.
 
 ---

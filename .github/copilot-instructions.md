@@ -1,6 +1,6 @@
 # SAST Multi-Agent Framework — Copilot Instructions
 
-This repository defines a specialized Static Application Security Testing (SAST) multi-agent framework designed for GitHub Copilot in VS Code. It audits Java/Spring and JavaScript/Node.js/TypeScript applications for critical vulnerabilities across HTTP endpoints, message queues, schedulers, template engines (SSTI), security middleware, and hardcoded secrets.
+This repository defines a specialized Static Application Security Testing (SAST) multi-agent framework designed for GitHub Copilot in VS Code. It audits Java/Spring and JavaScript/Node.js/TypeScript applications for critical vulnerabilities across HTTP endpoints, message queues, schedulers, template engines (SSTI), file upload handlers, security middleware, ReDoS/resource starvation, race conditions, log injection, weak crypto/PRNG, and hardcoded secrets.
 
 ---
 
@@ -13,8 +13,8 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | Prompt | Agent Invoked | Purpose |
 |---|---|---|
 | `/scan` | `@sast-orchestrator` | **(Recommended)** Auto-detects language, enforces ignore rules, indexes surfaces, runs code taint & secrets scan |
-| `/scan-java` | `@sast-java` | Direct Two-Pass Java/Spring scan (REST, Kafka, RabbitMQ, SQS, Thymeleaf/JSP SSTI) |
-| `/scan-js` | `@sast-js` | Direct Two-Pass Node.js/TS scan (Express, NestJS, Next.js, BullMQ, EJS/Pug SSTI) |
+| `/scan-java` | `@sast-java` | Direct Two-Pass Java/Spring scan (REST, Kafka/RabbitMQ/SQS, SSTI, ReDoS, Race Conditions, Uploads, Taint) |
+| `/scan-js` | `@sast-js` | Direct Two-Pass Node.js/TS scan (Express/NestJS/Next.js, BullMQ, SSTI, Prototype Pollution, ReDoS, Taint) |
 | `/scan-secrets` | `@sast-secrets` | Dedicated hardcoded secrets scan across all folders (with separate production vs. test sections) |
 | `/resume-scan` | `@sast-resume` | Continues an interrupted scan from `.sast-agent/output/scan-progress.md` |
 | `/rescan` | `@sast-resume` | Re-analyzes all indexed entry points with fresh eyes and archives previous report |
@@ -26,8 +26,8 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | Agent | File | Specialty |
 |---|---|---|
 | `@sast-orchestrator` | `.github/agents/sast-orchestrator.agent.md` | Pre-scan ignore enforcement, ecosystem detection, surface indexing, dispatching |
-| `@sast-java` | `.github/agents/sast-java.agent.md` | Two-pass Java taint engine (REST, queues, SpEL, JNDI, deserialization, SSRF, SQLi) |
-| `@sast-js` | `.github/agents/sast-js.agent.md` | Two-pass Node/TS taint engine (routes, workers, prototype pollution, NoSQLi, eval, SSRF) |
+| `@sast-java` | `.github/agents/sast-java.agent.md` | Two-pass Java taint engine (REST, queues, SpEL, JNDI, deserialization, SSRF, SQLi, ReDoS, Race Conditions, Uploads) |
+| `@sast-js` | `.github/agents/sast-js.agent.md` | Two-pass Node/TS taint engine (routes, workers, prototype pollution, NoSQLi, eval, SSRF, ReDoS, Event Loop Starvation) |
 | `@sast-secrets` | `.github/agents/sast-secrets.agent.md` | Deep hardcoded credential & token discovery with dual-section (Prod vs. Test) reporting |
 | `@sast-verifier` | `.github/agents/sast-verifier.agent.md` | False-positive elimination, CVSS v3.1 scoring, Burp PoC generation, markdown report writing |
 | `@sast-resume` | `.github/agents/sast-resume.agent.md` | Resume & rescan state coordinator |

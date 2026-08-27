@@ -1,6 +1,6 @@
 ---
 name: sast-java
-description: Advanced Two-Pass Java/Spring SAST Scanner. Audits REST controllers, WebFlux functional routes, message queues (Kafka, RabbitMQ, SQS), schedulers, templates (Thymeleaf/JSP SSTI), MyBatis XML, Jackson typing, and traces deep bidirectional taint flows.
+description: Advanced Two-Pass Java/Spring SAST Scanner. Audits REST controllers, WebFlux reactive routes, message queues, schedulers, templates (Thymeleaf/JSP SSTI), MyBatis XML, Jackson typing, ReDoS, concurrency/race conditions, file uploads, log injection, weak crypto/PRNG, and traces deep bidirectional taint flows.
 tools: ['search/codebase', 'read', 'edit']
 ---
 
@@ -66,19 +66,34 @@ Search the codebase for critical JVM sink signatures:
   - `ObjectInputStream.readObject()`, `XMLDecoder.readObject()`, XStream.
   - Jackson Polymorphic Deserialization: `@JsonTypeInfo(use = Id.CLASS)`, `@JsonTypeInfo(use = Id.MINIMAL_CLASS)`, `ObjectMapper.enableDefaultTyping()`, `objectMapper.activateDefaultTyping()`.
   - SnakeYAML: `new Yaml().load(untrustedString)` without `SafeConstructor`.
-- **XML External Entity — XXE (CWE-611)**:
-  - `DocumentBuilderFactory`, `SAXParserFactory`, `XMLInputFactory`, `TransformerFactory`, `SchemaFactory` without `disallow-doctype-decl` or secure processing enabled.
+- **XML External Entity — XXE & Billion Laughs (CWE-611, CWE-776)**:
+  - `DocumentBuilderFactory`, `SAXParserFactory`, `XMLInputFactory`, `TransformerFactory`, `SchemaFactory` without `disallow-doctype-decl` or entity expansion limit.
 - **SSRF (CWE-918)**:
   - `RestTemplate`, `WebClient`, `HttpURLConnection`, `HttpClient`, `URL.openStream()`, Apache `HttpClient`.
 - **Path Traversal & Zip Slip (CWE-22, CWE-29)**:
   - `MultipartFile.getOriginalFilename()` passed directly to `new File(uploadDir, filename)` without sanitizing `..` or calling `new File(filename).getName()`.
   - `ZipInputStream` extraction loops reading `ZipEntry.getName()` without verifying `canonicalPath.startsWith(destinationDir)`.
-- **Insecure Cryptography Defaults (CWE-327)**:
+- **Insecure Cryptography & Weak PRNG (CWE-327, CWE-330, CWE-338)**:
   - `Cipher.getInstance("AES")` (defaults to insecure `AES/ECB/PKCS5Padding` in Java).
   - Static IVs (`new IvParameterSpec(new byte[16])`), hardcoded DES/MD5/SHA1 for security hashing.
+  - `new Random()` or `ThreadLocalRandom` used for OTP generation, password reset tokens, or API keys (require `SecureRandom`).
 - **Server-Side Template Injection — SSTI (CWE-1336)**:
   - Spring MVC controllers returning user-controlled strings as Thymeleaf view names.
   - Unescaped user data rendered in Thymeleaf `th:utext` or JSP `<%= ... %>`.
+- **Regular Expression Denial of Service — ReDoS & Resource Exhaustion (CWE-1333, CWE-400)**:
+  - `Pattern.compile(userInput)` with dynamic patterns or matching untrusted input against nested quantifier regexes (e.g. `(a+)+$`).
+  - Unbounded stream reads: `InputStream.readAllBytes()`, `ByteArrayOutputStream` on client requests without length caps.
+- **Insecure File Upload & Temporary Files (CWE-434, CWE-436, CWE-377)**:
+  - Direct file storage without MIME magic byte verification (`Apache Tika`), allowing JSP/HTML/SVG script uploads.
+  - `File.createTempFile()` without POSIX file permissions.
+- **Log Injection / CRLF & Sensitive Data in Logs (CWE-117, CWE-532, CWE-209)**:
+  - Unsanitized user inputs in `log.info(...)`, `log.warn(...)`, `log.error(...)` allowing CRLF log forging.
+  - Cleartext logging of passwords, tokens, or PII.
+  - Exception handlers echoing raw SQL queries, stack traces, or internal server paths.
+- **Improper SSL/TLS Certificate Validation (CWE-295)**:
+  - Custom `X509TrustManager` with empty trust checks, `TrustAllStrategy`, or `NoopHostnameVerifier`.
+- **Open URL Redirection (CWE-601)**:
+  - `HttpServletResponse.sendRedirect(userInput)`, `new RedirectView(userInput)`, or `return "redirect:" + userInput`.
 
 ---
 
@@ -95,10 +110,13 @@ Process the indexed attack surface in batches of **3 to 4 items**:
 1. For every unparameterized query, command execution, or polymorphic deserializer found in Pass 1, trace caller hierarchies backward.
 2. Determine if an external HTTP route, message listener, or background task exposes a path to the sink.
 
-#### Flow C: Access Control & Normalization Bypasses
+#### Flow C: Access Control, Concurrency & Logic Auditing
 - **BOLA / IDOR**: Check whether endpoints accepting entity IDs verify tenant/user ownership (`WHERE id = :id AND user_id = :currentUser`).
+- **Spring Singleton Bean State Pollution (CWE-362, CWE-366)**: Detect instance variables storing request-specific state in Spring singleton beans (`@Component`, `@Service`, `@Controller`).
+- **Check-Then-Act Concurrency Flaws (CWE-367)**: Detect balance deduction, coupon redemption, or stock decrement operations lacking database locks (`PESSIMISTIC_WRITE`, `@Version`, or atomic `UPDATE` queries).
 - **Spring Security vs Interceptor Normalization Bypasses**: Check if authorization logic in interceptors is bypassable via matrix variables (`/admin;foo/users`), URL case variations, or trailing slashes.
 - **Mass Assignment**: Detect `@RequestBody` binding directly to JPA entity classes with sensitive fields (`role`, `isAdmin`, `balance`).
+- **Open Redirect & Log Injection Flows**: Trace user inputs flowing into redirect methods or logging statements without sanitization.
 
 ---
 
@@ -107,8 +125,9 @@ Process the indexed attack surface in batches of **3 to 4 items**:
 1. **Spring Actuator & DevTools Audit**:
    - Inspect `application.yml` / `application.properties` for exposed Actuator endpoints (`management.endpoints.web.exposure.include=*`).
    - Check if `/actuator/heapdump`, `/actuator/env`, `/actuator/mappings` or DevTools are accessible in production profiles.
-2. **Spring Security Configuration**:
-   - Inspect `SecurityFilterChain` / `WebSecurityConfigurerAdapter` for `csrf().disable()`, permissive `corsConfigurationSource`, and unauthenticated `permitAll` rules on sensitive API paths.
+2. **Spring Security & Cookie Configuration**:
+   - Inspect `SecurityFilterChain` / `WebSecurityConfigurerAdapter` for `csrf().disable()`, permissive `corsConfigurationSource`, unauthenticated `permitAll` rules on sensitive API paths, and missing session fixation migration.
+   - Audit cookie creation for missing `HttpOnly`, `Secure`, or `SameSite` flags.
 3. **Dependency Vulnerability Scan**:
    - Inspect `pom.xml` / `build.gradle` for known CVEs in Log4j, Jackson, Spring MVC/WebFlux, Commons-Collections, SnakeYAML.
 

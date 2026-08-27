@@ -1,6 +1,6 @@
 ---
 name: sast-js
-description: Advanced Two-Pass Node.js/TypeScript SAST Scanner. Audits Express/NestJS/Next.js routes, message queues (BullMQ, KafkaJS), template engines (EJS/Pug SSTI), prototype pollution, NoSQLi, and deep bidirectional taint flows.
+description: Advanced Two-Pass Node.js/TypeScript SAST Scanner. Audits Express/NestJS/Next.js routes, message queues, SSTI, prototype pollution, NoSQLi, ReDoS, event-loop starvation, file uploads, race conditions, log injection, weak crypto/PRNG, and deep bidirectional taint flows.
 tools: ['search/codebase', 'read', 'edit']
 ---
 
@@ -59,6 +59,22 @@ Search the codebase for critical JavaScript sink signatures:
 - **Server-Side Request Forgery — SSRF (CWE-918)**: `axios.get()`, `fetch()`, `got()`, `http.request()`, `needle()` with user-controlled URLs.
 - **DOM & Stored XSS (CWE-79)**: `dangerouslySetInnerHTML`, `innerHTML`, `v-html`, unencoded `res.send("<html>..." + input)`.
 - **Server-Side Template Injection — SSTI (CWE-1336)**: `ejs.render(userInput)`, `pug.compile(userInput)`, `Handlebars.compile(userInput)`.
+- **Regular Expression Denial of Service & Event Loop Starvation (CWE-1333, CWE-834, CWE-400)**:
+  - Dynamic `new RegExp(userInput)` or matching user input against vulnerable backtracking regexes (`(a+)+$`).
+  - Synchronous heavy operations blocking the main event loop (`JSON.parse` of unbounded payloads, `crypto.pbkdf2Sync` inside request handlers, unpaged synchronous loops).
+  - Missing file upload limits in `multer({ limits: ... })` or `busboy`.
+- **Insecure File Upload (CWE-434, CWE-436)**:
+  - Uploading executable files, HTML, or SVG with `<script>` tags without MIME magic byte validation (`file-type`).
+- **Log Injection / CRLF & Sensitive Data Logging (CWE-117, CWE-532, CWE-209)**:
+  - String concatenation in `winston.info()`, `pino.info()`, `console.log()` containing unescaped CRLF (`\r\n`).
+  - Logging passwords, tokens, or PII in cleartext.
+  - Express error handlers echoing raw SQL error objects or internal stack traces to the response.
+- **Improper SSL/TLS Certificate Validation (CWE-295)**:
+  - `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'` or `rejectUnauthorized: false` in `https.Agent`, `axios`, or `node-fetch`.
+- **Cryptographically Weak Randomness (CWE-330, CWE-338)**:
+  - `Math.random()` used for reset tokens, MFA codes, or session IDs (require `crypto.randomBytes()`).
+- **Open URL Redirection (CWE-601)**:
+  - `res.redirect(req.query.url)` or Next.js `redirect(url)` without strict domain allowlisting.
 
 ---
 
@@ -69,25 +85,28 @@ Process the indexed attack surface in batches of **3 to 5 items**:
 #### Flow A: Forward Source-to-Sink Tracing
 1. **Source Inspection**: Examine parameters (`req.body`, `req.params`, `req.query`, `req.headers`, `req.cookies`, message payload).
 2. **Middleware & Validation**: Check if input passes through validation libraries (Zod, Joi, class-validator, celebrate) or if untrusted objects flow untouched.
-3. **Sink Reachability**: Trace input into database queries, file operations, child processes, or response outputs.
+3. **Sink Reachability**: Trace input into database queries, file operations, child processes, response outputs, regex evaluators, or logging statements.
 
 #### Flow B: Reverse Sink-to-Source Verification
 1. For each dangerous sink identified in Pass 1, trace calling functions upward to locate exported route handlers, server actions, or queue workers.
 2. Confirm if the sink is exposed to attacker-manipulated data.
 
-#### Flow C: Authorization & Business Logic Auditing
+#### Flow C: Authorization, Concurrency & Business Logic Auditing
 - **BOLA / IDOR**: Verify if route handlers taking IDs (`req.params.id`) check authorization/ownership against `req.user.id`.
 - **Missing Authentication**: Detect state-changing routes missing auth middleware.
+- **Check-Then-Act Concurrency Flaws (CWE-367)**: Detect async check-then-act operations (balance deduction, stock decrement) lacking transactional locks or atomic database updates.
 - **Mass Assignment**: Check if `req.body` is passed directly to database creation/updates (`Model.create(req.body)`, `Model.update(req.body)`).
+- **Open Redirect & Log Injection Flows**: Trace unvalidated parameters to redirect calls or loggers.
 
 ---
 
 ### Global Config & Dependency SCA Pass
 
-1. **Middleware & Header Security**:
+1. **Middleware, Cookie & Header Security**:
    - Verify `helmet` integration and configuration.
    - Audit CORS configuration for origin reflection (`req.headers.origin`) or wildcard origin with credentials.
    - Check CSRF token protection on state-changing cookie-authenticated endpoints.
+   - Audit `res.cookie()` calls for missing `httpOnly`, `secure`, or `sameSite` flags.
 2. **Dependency Vulnerability Scan**:
    - Audit `package.json` for high-risk dependencies with known CVEs (e.g., vulnerable `jsonwebtoken`, `lodash`, `express-fileupload`, `ejs`).
 3. **Environment & Secrets**:
@@ -102,3 +121,4 @@ Process the indexed attack surface in batches of **3 to 5 items**:
   2. Hand off candidate findings to `@sast-verifier` (or append to `.sast-agent/output/findings.md`).
   3. Mark completed items with `[x]` in `.sast-agent/output/scan-progress.md`.
 - Save state continuously to prevent context exhaustion.
+

@@ -1,4 +1,4 @@
-# Comprehensive OWASP & CWE Vulnerability Checklist
+# Comprehensive OWASP, CWE Top 25 & Advanced SAST Vulnerability Checklist
 
 Use this checklist during **Pass 1 (Sink & Source Discovery)** and **Pass 2 (Bidirectional Taint Analysis)** across Java/Spring and Node.js/TypeScript codebases.
 
@@ -134,3 +134,142 @@ Use this checklist during **Pass 1 (Sink & Source Discovery)** and **Pass 2 (Bid
   - Permissive CORS (`Access-Control-Allow-Origin: *` with credentials enabled or reflecting `req.headers.origin`).
   - Disabled CSRF on session-authenticated applications.
   - Missing security headers (`Helmet`, `Strict-Transport-Security`, `Content-Security-Policy`).
+
+---
+
+## 10. Resource Exhaustion, ReDoS & Denial of Service (CWE-400, CWE-1333, CWE-776, CWE-409, CWE-834)
+
+### Regular Expression Denial of Service — ReDoS (CWE-1333)
+- **Java**:
+  - `Pattern.compile(userInput)` with untrusted dynamic regexes.
+  - Applying regular expressions with nested quantifiers (e.g., `(a+)+$`, `(a|aa)+$`, `([a-zA-Z0-9]+)*$`) on untrusted long input strings without execution timeouts.
+- **Node.js**:
+  - Dynamic `new RegExp(req.query.pattern)` or regex matching on user input using vulnerable backtracking expressions.
+  - Vulnerable third-party validation patterns in `validator.js`, `moment`, or custom parsing functions.
+
+### Unbounded Stream & Memory Starvation (CWE-400, CWE-834)
+- **Java**:
+  - Reading unbounded streams: `InputStream.readAllBytes()`, `ByteArrayOutputStream` on client input without explicit byte limits or chunking.
+  - Missing upload size limits (`spring.servlet.multipart.max-file-size` / `spring.servlet.multipart.max-request-size` disabled or set to `-1`).
+- **Node.js**:
+  - Unbounded stream buffering (`req.pipe()`, `concat-stream`, `busboy` / `multer` without `limits: { fileSize: ... }`).
+  - **Event-Loop Starvation (CWE-834)**: Synchronous compute operations on the main event loop handling large user payloads (`JSON.parse` of huge strings, synchronous crypto `crypto.pbkdf2Sync` in request handlers, synchronous file I/O `fs.readFileSync` on user routes).
+
+### Decompression Bombs & XML Expansion (CWE-409, CWE-776)
+- **Java / Node.js**:
+  - **Zip Bombs**: Uncompressed byte threshold missing in archive extraction (allowing small payloads to extract gigabytes of zeroes).
+  - **XML Billion Laughs**: Parsing untrusted XML without entity expansion limits (`EntityExpansionLimit`).
+
+---
+
+## 11. Concurrency, Race Conditions & State Pollution (CWE-362, CWE-367, CWE-366)
+
+### Spring Singleton Bean State Pollution (CWE-362, CWE-366)
+- **Java**:
+  - Mutable instance fields in Spring singleton beans (`@Controller`, `@RestController`, `@Service`, `@Component`) storing request-specific state (e.g. `private String currentUserId;`, `private User currentUser;`).
+  - Concurrent requests overwrite singleton instance state, causing data leakage and cross-tenant privilege escalation.
+
+### Check-Then-Act Concurrency Flaws / Double-Spend (CWE-367)
+- **Java & Node.js**:
+  - Checking account balances, coupon usage, gift card redemption, or inventory stock in code, followed by a separate update query without database locking:
+    ```
+    // Vulnerable Check-Then-Act
+    if (user.getBalance() >= amount) {
+        user.setBalance(user.getBalance() - amount);
+        userRepository.save(user);
+    }
+    ```
+  - Missing pessimistic locking (`SELECT ... FOR UPDATE` / `@Lock(LockModeType.PESSIMISTIC_WRITE)`), optimistic locking (`@Version`), or atomic database updates (`UPDATE users SET balance = balance - :amount WHERE id = :id AND balance >= :amount`).
+  - File existence checks followed by file creation/writing (`fs.existsSync` -> `fs.writeFileSync`) without atomic file descriptors.
+
+---
+
+## 12. Insecure File Upload & Temporary File Handling (CWE-434, CWE-436, CWE-377, CWE-378)
+
+### Unrestricted File Upload & Extension Bypass (CWE-434, CWE-436)
+- **Java & Node.js**:
+  - Uploading executable scripts (JSP, HTML, SVG with `<script>` tags, `.phtml`, `.phar`, `.shtml`) to web-accessible directories or public S3 buckets.
+  - Relying exclusively on client-supplied `Content-Type` headers or file extensions without verifying magic bytes (`Apache Tika`, `file-type`).
+  - Blacklist-based extension filtering (bypassed via `.jspx`, `.pht`, double extensions `.jpg.php`, or case manipulation).
+
+### Insecure Temporary File Creation (CWE-377, CWE-378)
+- **Java**:
+  - `File.createTempFile("prefix", ".tmp")` creates world-readable files on Unix-based operating systems in `/tmp`. Must use `Files.createTempFile()` with explicit POSIX permissions `PosixFilePermissions.asFileAttribute(EnumSet.of(OWNER_READ, OWNER_WRITE))`.
+- **Node.js**:
+  - Writing temporary files in `/tmp` without strict file modes (`mode: 0o600`).
+
+---
+
+## 13. Log Injection, Sensitive Data Exposure & Error Handling (CWE-117, CWE-532, CWE-209)
+
+### Log Injection / Log Forging (CRLF Injection - CWE-117)
+- **Java & Node.js**:
+  - Writing unescaped user inputs directly to logs: `logger.info("Failed login for user: " + username)`.
+  - Attackers inject `\r\n` (CRLF) characters to forge fraudulent log entries, mask intrusion traces, or inject malicious escape codes into log viewing terminals.
+
+### Sensitive Information in Logs (CWE-532)
+- **Java & Node.js**:
+  - Logging passwords, credit card numbers, Social Security numbers, session tokens, JWTs, or API keys in debug/info logs: `logger.debug("Request payload: " + requestBody)`.
+
+### Verbose Error Message Information Disclosure (CWE-209)
+- **Java & Node.js**:
+  - `@ExceptionHandler` methods or Express error middleware echoing raw exception messages (`e.getMessage()`), stack traces, raw SQL queries, or internal file paths to client HTTP responses.
+
+---
+
+## 14. SSL/TLS Validation, Insecure Transport & WebSockets (CWE-295, CWE-319, CWE-1385)
+
+### Improper SSL/TLS Certificate Validation (CWE-295)
+- **Java**:
+  - Implementing custom `X509TrustManager` with empty `checkServerTrusted()` and `checkClientTrusted()` methods (trusting all certificates).
+  - Setting `HostnameVerifier` to return `true` unconditionally (`NoopHostnameVerifier`).
+- **Node.js**:
+  - Setting `process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'` or passing `rejectUnauthorized: false` in `https.Agent`, `axios`, `got`, or `fetch` options.
+
+### Insecure Internal Transport (CWE-319)
+- **Java & Node.js**:
+  - Transmitting sensitive authentication tokens or credentials over plaintext HTTP or unencrypted internal socket connections.
+  - Plaintext database or Redis cache connections (`useSSL=false`, `redis://` instead of `rediss://`) transmitting session data across untrusted networks.
+
+### Cross-Site WebSocket Hijacking — CSWSH (CWE-1385)
+- **Java & Node.js**:
+  - WebSocket handshakes relying on session cookies without validating the `Origin` header or requiring a one-time anti-CSRF token.
+
+---
+
+## 15. Weak Randomness, Session Lifecycle & Cookie Security (CWE-330, CWE-338, CWE-384, CWE-613, CWE-1004, CWE-614)
+
+### Cryptographically Weak Randomness (CWE-330, CWE-338)
+- **Java**:
+  - Using `java.util.Random` or `ThreadLocalRandom` to generate security-sensitive values (password reset tokens, MFA OTP codes, API keys, session identifiers). Must use `java.security.SecureRandom`.
+- **Node.js**:
+  - Using `Math.random()` to generate tokens, OTPs, or cryptographic keys. Must use `crypto.randomBytes()` or `crypto.randomInt()`.
+
+### Session Fixation & Insufficient Invalidation (CWE-384, CWE-613)
+- **Java & Node.js**:
+  - Failing to invalidate the existing session and assign a new session ID upon successful user login (`request.changeSessionId()` or Spring Security `sessionManagement().sessionFixation().migrateSession()`).
+  - Stateless JWT implementations with no revocation blacklist / JTI tracking on logout or password change.
+
+### Missing Cookie Security Flags & Insecure Prefixes (CWE-1004, CWE-614)
+- **Java & Node.js**:
+  - Setting session or authentication cookies without `HttpOnly`, `Secure`, and `SameSite=Lax` or `SameSite=Strict`.
+  - Omitting secure cookie prefixes (`__Host-` or `__Secure-`) for sensitive domain-wide cookies.
+
+---
+
+## 16. Open Redirect & HTTP Response Splitting (CWE-601, CWE-113, CWE-644)
+
+### Open URL Redirection (CWE-601)
+- **Java**:
+  - Passing untrusted user parameters directly to `response.sendRedirect(returnUrl)` or Spring MVC `new RedirectView(returnUrl)` / `return "redirect:" + returnUrl;` without strict domain allowlisting.
+- **Node.js**:
+  - Passing unvalidated query parameters to `res.redirect(req.query.target)` or Next.js `redirect(url)`.
+
+### HTTP Response Splitting & Header Injection (CWE-113)
+- **Java & Node.js**:
+  - Writing user input containing unescaped `\r\n` into HTTP response headers (`response.setHeader("X-Custom", userInput)`, `res.set("X-User", req.query.name)`).
+
+### Web Cache Deception & Cache Poisoning (CWE-644)
+- **Java & Node.js**:
+  - Static caching rules combined with dynamic endpoints where unkeyed headers (e.g. `X-Forwarded-Host`, `X-Original-URL`) are reflected in cached responses.
+
