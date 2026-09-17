@@ -1,5 +1,7 @@
 # Runtime scan output (populated during scans, not committed)
 .sast-agent/output/
+SQL Check Run*/
 
 # Scan logs
 .sast-agent/logs/
+

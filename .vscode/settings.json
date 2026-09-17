@@ -4,6 +4,7 @@
     ".github/instructions/ignore-patterns.instructions.md",
     ".github/instructions/secret-detection.instructions.md",
     ".github/instructions/finding-format.instructions.md",
-    ".github/instructions/owasp-checklist.instructions.md"
+    ".github/instructions/owasp-checklist.instructions.md",
+    ".github/instructions/sql-injection-checklist.instructions.md"
   ]
 }
