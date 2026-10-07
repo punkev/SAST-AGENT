@@ -4,7 +4,9 @@ Execute a comprehensive Injection Vulnerability security audit on all attached c
 
 ## Execution Instructions
 
-1. **Multi-Folder Scope**: Analyze all attached folders, modules, and subdirectories (controllers, routes, services, repositories, DAOs, ORM mappers, dynamic query builders, process executors, template engines, and logging pipelines).
+1. **Multi-Folder Scope & Fast-Index**:
+   - Check if `.sast-agent/output/pre-scan-index.json` was generated (via `.\scripts\pre-scan.ps1`). If present, load discovered entry points and dangerous sinks directly to accelerate analysis.
+   - Analyze all attached folders, modules, and subdirectories (controllers, routes, services, repositories, DAOs, ORM mappers, dynamic query builders, process executors, template engines, and logging pipelines).
 2. **Sequential Run Output**:
    - Check `.sast-agent/output/` for existing `Injection Check Run <N>` directories.
    - Increment to the next sequential run directory: `.sast-agent/output/Injection Check Run {N+1}/`.

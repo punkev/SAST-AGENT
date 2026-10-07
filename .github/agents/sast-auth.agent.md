@@ -60,6 +60,7 @@ Audit all security filters, identity providers, and authentication modules:
 ```
 
 1. **Phase 1 — Discovery**:
+   - Check if `.sast-agent/output/pre-scan-index.json` exists (from `.\scripts\pre-scan.ps1`). If present, load discovered controllers, auth endpoints, and token handlers directly.
    - Locate all login, registration, token issuance, refresh, logout, and password reset endpoints.
    - Populate `scan-progress.md` with discovered endpoints and authorization filters.
 2. **Phase 2 — Hierarchy Mapping**:

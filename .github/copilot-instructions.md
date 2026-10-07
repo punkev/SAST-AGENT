@@ -6,9 +6,14 @@ This repository defines a specialized Static Application Security Testing (SAST)
 
 ## 1. Quick Start: How to Scan
 
-1. Open VS Code with this repository or open GitHub Copilot Chat.
-2. **Attach your target project source code folder(s)** to the chat.
-3. Run one of the slash prompts or invoke an agent:
+1. **(Optional - Recommended for 5x–10x Faster Scans)**: In your VS Code terminal, run the fast pre-scan indexer:
+   ```powershell
+   .\scripts\pre-scan.ps1
+   ```
+   *This pre-indexes all entry points and sinks into `.sast-agent/output/pre-scan-index.json` in under 1 second.*
+2. Open VS Code with this repository or open GitHub Copilot Chat.
+3. **Attach your target project source code folder(s)** to the chat.
+4. Run one of the slash prompts or invoke an agent (agents will automatically detect and load `pre-scan-index.json` if present):
 
 | Prompt | Agent Invoked | Purpose |
 |---|---|---|

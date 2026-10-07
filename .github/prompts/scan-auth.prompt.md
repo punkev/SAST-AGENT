@@ -4,7 +4,9 @@ Execute an exhaustive security audit of all authentication mechanisms, JWT/token
 
 ## Execution Instructions
 
-1. **Scope**: Inspect all security filters, token handlers, OAuth callbacks, session stores, authorization annotations, and data queries across attached codebases.
+1. **Scope & Fast-Index**:
+   - Check if `.sast-agent/output/pre-scan-index.json` was generated (via `.\scripts\pre-scan.ps1`). If present, load discovered authentication controllers, token handlers, and routes directly to accelerate the scan.
+   - Inspect all security filters, token handlers, OAuth callbacks, session stores, authorization annotations, and data queries across attached codebases.
 2. **Sequential Run Output**:
    - Check `.sast-agent/output/` for existing `Auth Check Run <N>` directories.
    - Increment to the next sequential run directory: `.sast-agent/output/Auth Check Run {N+1}/`.

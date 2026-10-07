@@ -120,14 +120,16 @@ Execute the scan across all attached folders through 4 sequential phases:
 
 ### Phase 1: Multi-Folder Discovery & Entry Point Inventory
 
-1. **Discover Attached Folders**:
+1. **Check for Fast Pre-Scan Index**:
+   - Check if `.sast-agent/output/pre-scan-index.json` exists (generated via `.\scripts\pre-scan.ps1`). If found, load the pre-computed entry points and sinks immediately, bypassing manual filesystem traversal!
+2. **Discover Attached Folders**:
    - Identify all root directories or project modules attached by the user (controllers, microservices, API gateways, workers, script directories).
    - Support polyglot projects: Java (Spring, Quarkus, Micronaut, Servlets), JavaScript/TypeScript (Node, Express, Next, Nest), Python (Django, Flask, FastAPI), C# (.NET Core/Framework), PHP, Go, and SQL/scripts.
-2. **Inventory Entry Points**:
+3. **Inventory Entry Points**:
    - Scan all `@Controller`, `@RestController`, Express routes, FastAPI handlers, ASP.NET controllers, etc.
    - Catalog all input sources: `@RequestParam`, `@PathVariable`, `@RequestBody`, `@RequestHeader`, `req.query`, `req.body`, `req.params`, form inputs, WebSocket messages, GraphQL inputs, and message broker listeners (`@KafkaListener`, `@RabbitListener`, BullMQ).
-3. **Initialize Checklist**:
-   - Create `.sast-agent/output/Injection Check Run {N+1}/scan-progress.md` listing all discovered controllers, endpoints, and components.
+4. **Initialize Checklist**:
+   - Create `.sast-agent/output/Injection Check Run {N+1}/scan-progress.md` listing all discovered controllers, endpoints, and components (populating from `pre-scan-index.json` if available).
 
 ---
 
