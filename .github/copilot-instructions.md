@@ -13,7 +13,9 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | Prompt | Agent Invoked | Purpose |
 |---|---|---|
 | `/scan` | `@sast-orchestrator` | **(Recommended)** Auto-detects language, enforces ignore rules, indexes surfaces, runs code taint & secrets scan |
-| `/scan-sql` | `@sast-sql` | Full audit of controllers, services, repositories, and procedures for all SQLi types |
+| `/scan-injection` | `@sast-injection` | Dedicated audit of all injection-based flaws (SQLi, NoSQLi, OS Command, Code Eval, SSTI, SpEL/EL, LDAP, XPath/XXE, CRLF/Log, SSRF) |
+| `/scan-auth` | `@sast-auth` | Dedicated audit of authentication, JWT/tokens, OAuth2/OIDC, session lifecycles, and BOLA/IDOR |
+| `/scan-iac` | `@sast-iac` | Dedicated audit of Dockerfiles, Kubernetes manifests, Helm charts, Terraform, and GitHub Actions |
 | `/scan-java` | `@sast-java` | Direct Two-Pass Java/Spring scan (REST, Kafka/RabbitMQ/SQS, SSTI, ReDoS, Race Conditions, Uploads, Taint) |
 | `/scan-js` | `@sast-js` | Direct Two-Pass Node.js/TS scan (Express/NestJS/Next.js, BullMQ, SSTI, Prototype Pollution, ReDoS, Taint) |
 | `/scan-secrets` | `@sast-secrets` | Dedicated hardcoded secrets scan across all folders (with separate production vs. test sections) |
@@ -27,7 +29,9 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | Agent | File | Specialty |
 |---|---|---|
 | `@sast-orchestrator` | `.github/agents/sast-orchestrator.agent.md` | Pre-scan ignore enforcement, ecosystem detection, surface indexing, dispatching |
-| `@sast-sql` | `.github/agents/sast-sql.agent.md` | Deep SQL, PL/SQL, Native Query, Blind & 2nd Order SQLi scanner with sequential run tracking (`SQL Check Run <N>`) |
+| `@sast-injection` | `.github/agents/sast-injection.agent.md` | Dedicated injection scanner (SQLi, NoSQLi, OS Command, Code Eval, SSTI, SpEL/EL, LDAP, XPath/XXE, CRLF, SSRF) with sequential tracking (`Injection Check Run <N>`) |
+| `@sast-auth` | `.github/agents/sast-auth.agent.md` | Dedicated auth & token scanner (JWT, OAuth2/OIDC, session fixation, BOLA/IDOR) with sequential tracking (`Auth Check Run <N>`) |
+| `@sast-iac` | `.github/agents/sast-iac.agent.md` | Dedicated IaC scanner (Docker, Kubernetes, Helm, Terraform, GitHub Actions) with sequential tracking (`IaC Check Run <N>`) |
 | `@sast-java` | `.github/agents/sast-java.agent.md` | Two-pass Java taint engine (REST, queues, SpEL, JNDI, deserialization, SSRF, SQLi, ReDoS, Race Conditions, Uploads) |
 | `@sast-js` | `.github/agents/sast-js.agent.md` | Two-pass Node/TS taint engine (routes, workers, prototype pollution, NoSQLi, eval, SSRF, ReDoS, Event Loop Starvation) |
 | `@sast-secrets` | `.github/agents/sast-secrets.agent.md` | Deep hardcoded credential & token discovery with dual-section (Prod vs. Test) reporting |
@@ -43,9 +47,15 @@ All scan outputs are written to `.sast-agent/output/` (gitignored):
   - `findings.md`: Final verified markdown vulnerability report.
   - `secrets-findings.md`: Dedicated credentials report (Production vs. Test sections).
   - `scan-progress.md`: Live attack surface inventory & batch progress checklist.
-- **SQL Injection Scans (`@sast-sql`)**:
-  - Automatically versioned into sequential directories: `.sast-agent/output/SQL Check Run 1/`, `SQL Check Run 2/`, etc.
-  - Each run directory contains `findings.md`, `scan-progress.md`, `summary.md`, and `findings.json`.
+- **Dedicated Injection Scans (`@sast-injection`)**:
+  - Automatically versioned into sequential directories: `.sast-agent/output/Injection Check Run <N>/`.
+  - Contains `findings.md`, `scan-progress.md`, `summary.md`, and `findings.json`.
+- **Dedicated Auth Scans (`@sast-auth`)**:
+  - Automatically versioned into sequential directories: `.sast-agent/output/Auth Check Run <N>/`.
+  - Contains `findings.md`, `scan-progress.md`, `summary.md`, and `findings.json`.
+- **Dedicated IaC & Container Scans (`@sast-iac`)**:
+  - Automatically versioned into sequential directories: `.sast-agent/output/IaC Check Run <N>/`.
+  - Contains `findings.md`, `scan-progress.md`, `summary.md`, and `findings.json`.
 
 ---
 
@@ -56,7 +66,7 @@ All scan outputs are written to `.sast-agent/output/` (gitignored):
 - **No Code Modifications**: Agents NEVER modify application source code. All output is written to `.sast-agent/output/`.
 - **Zero Hallucination / Real Code**: Every finding must reference real file paths, line numbers, and verbatim code blocks.
 - **Burp PoCs for High/Crit**: Critical and High severity general code findings must provide copy-pasteable Burp Suite HTTP requests.
-- **Mandatory Evidences for SQL Scans (`@sast-sql`)**:
+- **Mandatory Evidences for Injection Scans (`@sast-injection`)**:
   - Sample Burp Suite raw HTTP request is **MANDATORY for EACH and EVERY finding reported** (regardless of severity).
-  - Mermaid dataflow flowchart (Front-End User ➔ Controller ➔ Service ➔ Repository ➔ DB) is **MANDATORY**.
+  - Mermaid dataflow flowchart (Client ➔ Controller ➔ Service ➔ Dangerous Sink ➔ Engine/Interpreter) is **MANDATORY**.
   - Non-technical plain-English justification (why it occurred and business risk) is **MANDATORY**.

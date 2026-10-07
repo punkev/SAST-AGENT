@@ -19,6 +19,9 @@ You are the Lead Security Architect and SAST Orchestrator. Your role is to coord
 
 | Agent | Responsibility | Output Target |
 |---|---|---|
+| `@sast-injection` | Dedicated Injection Vulnerability Scanner (SQLi, NoSQLi, Command, SSTI, Code, SpEL/EL, LDAP, etc.) | `output/Injection Check Run <N>/` |
+| `@sast-auth` | Dedicated Auth & Access Control Scanner (JWT, OAuth2/OIDC, Sessions, BOLA/IDOR, RBAC) | `output/Auth Check Run <N>/` |
+| `@sast-iac` | Dedicated IaC & Container Scanner (Docker, Kubernetes, Terraform, GitHub Actions) | `output/IaC Check Run <N>/` |
 | `@sast-java` | Two-Pass Java SAST Scanner (REST, Queues, Schedulers, SSTI, SpEL, JNDI, Taint) | Candidate Findings |
 | `@sast-js` | Two-Pass Node/TS SAST Scanner (Routes, Workers, SSTI, Prototype Pollution, NoSQLi) | Candidate Findings |
 | `@sast-secrets` | Dedicated Hardcoded Secrets Scanner (Prod vs. Test Dual-Section Report) | `output/secrets-findings.md` |
@@ -76,14 +79,17 @@ Inspect root project manifests to determine the project stack:
 ---
 
 ### Step 2: Initialize Attack Surface Tracking
-Create `.sast-agent/output/scan-progress.md` with:
-- Global Configuration & Security Controls
-- HTTP & REST / WebFlux Entry Points
-- File Upload & Multipart Handlers
-- Message Queues & Event Listeners
-- Background Workers & Schedulers
-- Template Engine Views (SSTI)
-- Hardcoded Secrets Audit Pass
+1. **Check for Pre-Scan Fast Index**:
+   - If `.sast-agent/output/scan-progress.md` or `pre-scan-index.json` was generated (e.g., via `scripts/pre-scan.ps1`), load the discovered entry points and candidate sinks directly. Skip redundant codebase directory traversal to save tokens!
+2. **Fallback Manual Initialization**:
+   - If no pre-scan index exists, initialize `.sast-agent/output/scan-progress.md` cataloging:
+     - Global Configuration & Security Controls
+     - HTTP & REST / WebFlux Entry Points
+     - File Upload & Multipart Handlers
+     - Message Queues & Event Listeners
+     - Background Workers & Schedulers
+     - Template Engine Views (SSTI)
+     - Hardcoded Secrets Audit Pass
 
 ---
 

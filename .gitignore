@@ -1,7 +1,9 @@
 # Runtime scan output (populated during scans, not committed)
 .sast-agent/output/
+Injection Check Run*/
+Auth Check Run*/
+IaC Check Run*/
 SQL Check Run*/
 
 # Scan logs
 .sast-agent/logs/
-
