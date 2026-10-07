@@ -80,7 +80,7 @@ Inspect root project manifests to determine the project stack:
 
 ### Step 2: Initialize Attack Surface Tracking
 1. **Check for Pre-Scan Fast Index**:
-   - If `.sast-agent/output/scan-progress.md` or `pre-scan-index.json` was generated (e.g., via `scripts/pre-scan.ps1`), load the discovered entry points and candidate sinks directly. Skip redundant codebase directory traversal to save tokens!
+   - If `.sast-agent/output/scan-progress.md` or `pre-scan-index.json` was generated (e.g., via `scripts/pre-scan.cmd` or `scripts/pre-scan.ps1`), load the discovered entry points and candidate sinks directly. Skip redundant codebase directory traversal to save tokens!
 2. **Fallback Manual Initialization**:
    - If no pre-scan index exists, initialize `.sast-agent/output/scan-progress.md` cataloging:
      - Global Configuration & Security Controls

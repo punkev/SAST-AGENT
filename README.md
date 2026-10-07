@@ -95,10 +95,14 @@ A specialized, multi-agent Static Application Security Testing (SAST) framework 
 ### ⚡ Fast-Mode Pre-Scan Acceleration (Recommended)
 Before running prompts in Copilot Chat, you can run the zero-dependency fast pre-scanner in your terminal. It indexes entry points and candidate sinks in **under 1 second**, saving **70%+ LLM token overhead** and speeding up the scan by **5x–10x**:
 
-```powershell
-.\scripts\pre-scan.ps1
+```cmd
+.\scripts\pre-scan.cmd
 ```
-*(Or specify a folder: `.\scripts\pre-scan.ps1 -TargetPath "C:\path\to\target"`)*
+*Or in PowerShell directly (bypassing ExecutionPolicy restrictions):*
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\pre-scan.ps1
+```
+*(Or specify a folder: `.\scripts\pre-scan.cmd -TargetPath "C:\path\to\target"`)*
 
 ### 🔍 Running Copilot Chat Scans
 1. Open this repository in VS Code (or have its instructions loaded).
