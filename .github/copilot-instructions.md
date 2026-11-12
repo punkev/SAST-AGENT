@@ -19,6 +19,7 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | `/scan-secrets` | `@sast-secrets` | Dedicated hardcoded secrets scan across all folders (with separate production vs. test sections) |
 | `/resume-scan` | `@sast-resume` | Continues an interrupted scan from `.sast-agent/output/scan-progress.md` |
 | `/rescan` | `@sast-resume` | Re-analyzes all indexed entry points with fresh eyes and archives previous report |
+| `/retest` | `@sast-retest` | Verifies whether reported vulnerabilities are fixed in updated source code, generates Burp PoC evidence |
 
 ---
 
@@ -33,6 +34,7 @@ This repository defines a specialized Static Application Security Testing (SAST)
 | `@sast-secrets` | `.github/agents/sast-secrets.agent.md` | Deep hardcoded credential & token discovery with dual-section (Prod vs. Test) reporting |
 | `@sast-verifier` | `.github/agents/sast-verifier.agent.md` | False-positive elimination, CVSS v3.1 scoring, Burp PoC generation, markdown report writing |
 | `@sast-resume` | `.github/agents/sast-resume.agent.md` | Resume & rescan state coordinator |
+| `@sast-retest` | `.github/agents/sast-retest.agent.md` | Fix verification, retest verdicts (Fixed/Partial/Not Fixed/Inconclusive), Burp PoC evidence generation |
 
 ---
 
@@ -46,6 +48,9 @@ All scan outputs are written to `.sast-agent/output/` (gitignored):
 - **SQL Injection Scans (`@sast-sql`)**:
   - Automatically versioned into sequential directories: `.sast-agent/output/SQL Check Run 1/`, `SQL Check Run 2/`, etc.
   - Each run directory contains `findings.md`, `scan-progress.md`, `summary.md`, and `findings.json`.
+- **Retest Reports (`@sast-retest`)**:
+  - Written to `.sast-agent/output/retest/retest-{timestamp}.md`.
+  - Each report contains verdict summaries, code analysis, source-to-sink traces, and Burp PoC requests for evidence gathering.
 
 ---
 
